@@ -5,6 +5,7 @@
   import OrderBook from './lib/components/OrderBook.svelte';
   import PlaceOrder from './lib/components/PlaceOrder.svelte';
   import TransactionHistory from './lib/components/TransactionHistory.svelte';
+  import Leaderboard from './lib/components/Leaderboard.svelte';
 
   onMount(() => {
     initializeStores();
@@ -31,6 +32,11 @@
     <!-- Selection Section -->
     <section class="selection-section">
       <OutletSelector />
+    </section>
+
+    <!-- Leaderboard Section -->
+    <section class="leaderboard-section">
+      <Leaderboard />
     </section>
 
     {#if $selectedOutlet && $selectedDonutType}
@@ -135,6 +141,10 @@
   }
 
   .selection-section {
+    margin-bottom: 2rem;
+  }
+
+  .leaderboard-section {
     margin-bottom: 2rem;
   }
 

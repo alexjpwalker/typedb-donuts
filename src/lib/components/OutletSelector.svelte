@@ -4,6 +4,10 @@
   function formatBalance(balance: number | undefined): string {
     return balance !== undefined ? balance.toFixed(2) : '0.00';
   }
+
+  function formatMargin(margin: number | undefined): string {
+    return margin !== undefined ? `${margin}%` : 'N/A';
+  }
 </script>
 
 <div class="selector-container">
@@ -24,6 +28,7 @@
             </div>
             <div class="card-body">
               <span class="location">{outlet.location}</span>
+              <span class="margin-info">Retail Margin: {formatMargin(outlet.marginPercent)}</span>
             </div>
           </button>
         {/each}
@@ -134,6 +139,14 @@
   .location,
   .description {
     display: block;
+  }
+
+  .margin-info {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: #7c3aed;
+    font-weight: 500;
   }
 
   .empty {
