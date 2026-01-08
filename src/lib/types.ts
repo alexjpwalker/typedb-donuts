@@ -17,7 +17,8 @@ export interface Outlet {
   outletId: string;
   outletName: string;
   location: string;
-  balance: number;
+  balance?: number; // Optional since some old outlets may not have it
+  marginPercent?: number; // Retail markup percentage
   createdAt: string;
 }
 

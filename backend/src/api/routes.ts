@@ -89,6 +89,58 @@ export function createRoutes(exchangeService: ExchangeService): Router {
     }
   });
 
+  router.patch('/outlets/:outletId/margin', async (req: Request, res: Response) => {
+    try {
+      const { outletId } = req.params;
+      const { marginPercent } = req.body;
+
+      if (typeof marginPercent !== 'number' || marginPercent < 0 || marginPercent > 100) {
+        res.status(400).json({ error: 'Invalid margin percent. Must be between 0 and 100.' });
+        return;
+      }
+
+      await exchangeService.updateOutletMargin(outletId, marginPercent);
+      res.json({ success: true, outletId, marginPercent });
+    } catch (error) {
+      console.error('Error updating margin:', error);
+      res.status(500).json({ error: 'Failed to update margin' });
+    }
+  });
+
+  router.post('/outlets/:outletId/sell-to-customer', async (req: Request, res: Response) => {
+    try {
+      const { outletId } = req.params;
+      const { donutTypeId, quantity } = req.body;
+
+      const sale = await exchangeService.sellToCustomer(outletId, donutTypeId, quantity);
+      res.json(sale);
+    } catch (error) {
+      console.error('Error recording customer sale:', error);
+      res.status(500).json({ error: (error as Error).message || 'Failed to record sale' });
+    }
+  });
+
+  router.get('/outlets/:outletId/stats', async (req: Request, res: Response) => {
+    try {
+      const { outletId } = req.params;
+      const stats = await exchangeService.getOutletStats(outletId);
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      res.status(500).json({ error: 'Failed to fetch statistics' });
+    }
+  });
+
+  router.get('/leaderboard', async (_req: Request, res: Response) => {
+    try {
+      const leaderboard = await exchangeService.getLeaderboard();
+      res.json(leaderboard);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    }
+  });
+
   // ==========================================
   // Orders
   // ==========================================

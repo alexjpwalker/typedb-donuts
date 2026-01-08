@@ -8,6 +8,7 @@ attribute outlet-id, value string;
 attribute outlet-name, value string;
 attribute location, value string;
 attribute balance, value double;
+attribute margin-percent, value double;
 
 attribute donut-type-id, value string;
 attribute donut-name, value string;
@@ -20,6 +21,11 @@ attribute status, value string;
 
 attribute transaction-id, value string;
 attribute total-amount, value double;
+attribute cost-basis, value double;
+attribute revenue, value double;
+attribute profit, value double;
+attribute inventory-quantity, value integer;
+attribute sale-id, value string;
 
 attribute match-price, value double;
 attribute match-quantity, value integer;
@@ -35,19 +41,22 @@ attribute matched-at, value datetime;
 
 entity outlet,
     owns outlet-id @key,
-    owns outlet-name,
-    owns location,
-    owns balance,
-    owns created-at,
+    owns outlet-name @card(1..1),
+    owns location @card(1..1),
+    owns balance @card(1..1),
+    owns margin-percent @card(1..1),
+    owns created-at @card(1..1),
     plays listing-creation:creator,
     plays order-placement:placer,
     plays trade-execution:buyer,
-    plays trade-execution:seller;
+    plays trade-execution:seller,
+    plays customer-sale:seller,
+    plays inventory-holding:holder;
 
 entity donut-type,
     owns donut-type-id @key,
-    owns donut-name,
-    owns description;
+    owns donut-name @card(1..1),
+    owns description @card(1..1);
 
 entity order @abstract,
     owns order-id @key,
@@ -74,6 +83,21 @@ entity transaction,
     owns total-amount,
     owns executed-at,
     plays trade-execution:trade;
+
+entity customer-sale-record,
+    owns sale-id @key,
+    owns quantity,
+    owns cost-basis,
+    owns revenue,
+    owns profit,
+    owns executed-at,
+    plays customer-sale:sale;
+
+entity inventory,
+    owns donut-type-id,
+    owns inventory-quantity,
+    owns cost-basis,
+    plays inventory-holding:inventory;
 
 # ==========================================
 # Relations
@@ -103,3 +127,12 @@ relation trade-execution,
     relates trade,
     relates order,
     owns donut-type-id;
+
+relation customer-sale,
+    relates seller,
+    relates sale,
+    owns donut-type-id;
+
+relation inventory-holding,
+    relates holder,
+    relates inventory;

@@ -24,7 +24,36 @@ export interface Outlet {
   outletName: string;
   location: string;
   balance: number;
+  marginPercent: number; // Retail markup percentage (e.g., 30 = 30%)
   createdAt: Date;
+}
+
+export interface OutletStats {
+  outletId: string;
+  outletName: string;
+  totalRevenue: number;
+  totalCosts: number;
+  netProfit: number;
+  customerSalesCount: number;
+  averageMargin: number;
+}
+
+export interface CustomerSale {
+  saleId: string;
+  outletId: string;
+  donutTypeId: string;
+  quantity: number;
+  costBasis: number;
+  revenue: number;
+  profit: number;
+  executedAt: Date;
+}
+
+export interface Inventory {
+  outletId: string;
+  donutTypeId: string;
+  quantity: number;
+  averageCost: number;
 }
 
 export interface DonutType {

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { outlets, donutTypes, selectedOutlet, selectedDonutType } from '../stores';
 
-  function formatBalance(balance: number): string {
-    return balance.toFixed(2);
+  function formatBalance(balance: number | undefined): string {
+    return balance !== undefined ? balance.toFixed(2) : '0.00';
   }
 </script>
 

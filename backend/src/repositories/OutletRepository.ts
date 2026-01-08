@@ -22,6 +22,7 @@ export class OutletRepository {
   async create(outlet: Omit<Outlet, 'createdAt'>): Promise<Outlet> {
     // TypeDB expects datetime in ISO 8601 format without timezone (YYYY-MM-DDTHH:MM:SS.sss)
     const now = new Date().toISOString().replace('Z', '');
+    const marginPercent = outlet.marginPercent || 25.0; // Default 25% margin
     const query = `
       insert
       $outlet isa outlet,
@@ -29,6 +30,7 @@ export class OutletRepository {
         has outlet-name "${outlet.outletName}",
         has location "${outlet.location}",
         has balance ${outlet.balance},
+        has margin-percent ${marginPercent},
         has created-at ${now};
     `;
 
@@ -57,6 +59,7 @@ export class OutletRepository {
         outletName: doc['outlet-name'],
         location: doc.location,
         balance: doc.balance,
+        marginPercent: doc['margin-percent'] || 25.0,
         createdAt: new Date(doc['created-at'])
       };
     }
@@ -79,6 +82,7 @@ export class OutletRepository {
         outletName: doc['outlet-name'],
         location: doc.location,
         balance: doc.balance,
+        marginPercent: doc['margin-percent'] || 25.0,
         createdAt: new Date(doc['created-at'])
       }));
     }
@@ -87,11 +91,31 @@ export class OutletRepository {
   }
 
   async updateBalance(outletId: string, newBalance: number): Promise<void> {
-    const queries = [
-      `match $outlet isa outlet, has outlet-id "${outletId}", has balance $bal; delete $bal isa balance;`,
-      `match $outlet isa outlet, has outlet-id "${outletId}"; insert $outlet has balance ${newBalance};`
-    ];
+    // TypeDB 3.x: delete just needs the variable, then insert new value
+    const query = `
+      match
+      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet has balance $old_bal;
+      delete
+      $old_bal;
+      insert
+      $outlet has balance ${newBalance};
+    `;
 
-    await this.getHelper().executeTransaction(queries);
+    await this.getHelper().executeWriteQuery(query);
+  }
+
+  async updateMargin(outletId: string, newMarginPercent: number): Promise<void> {
+    const query = `
+      match
+      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet has margin-percent $old_margin;
+      delete
+      $old_margin;
+      insert
+      $outlet has margin-percent ${newMarginPercent};
+    `;
+
+    await this.getHelper().executeWriteQuery(query);
   }
 }
