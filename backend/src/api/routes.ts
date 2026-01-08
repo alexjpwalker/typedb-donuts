@@ -10,6 +10,7 @@ export function createRoutes(exchangeService: ExchangeService): Router {
   // ==========================================
 
   router.get('/health', (_req: Request, res: Response) => {
+    console.log('[HEALTH] Health check called');
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
@@ -138,6 +139,46 @@ export function createRoutes(exchangeService: ExchangeService): Router {
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
       res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    }
+  });
+
+  // IMPORTANT: Define toggle-all before :outletId/toggle to avoid route conflict
+  router.patch('/outlets/toggle-all', async (req: Request, res: Response) => {
+    try {
+      const { isOpen } = req.body;
+
+      if (typeof isOpen !== 'boolean') {
+        res.status(400).json({ error: 'isOpen must be a boolean' });
+        return;
+      }
+
+      await exchangeService.toggleAllOutletsOpen(isOpen);
+      res.json({ success: true, isOpen });
+    } catch (error) {
+      console.error('Error toggling all outlets:', error);
+      res.status(500).json({ error: 'Failed to toggle all outlets' });
+    }
+  });
+
+  router.patch('/outlets/:outletId/toggle', async (req: Request, res: Response) => {
+    try {
+      const { outletId } = req.params;
+      const { isOpen } = req.body;
+
+      console.log(`[TOGGLE] Received request for outlet ${outletId}, isOpen=${isOpen}`);
+
+      if (typeof isOpen !== 'boolean') {
+        res.status(400).json({ error: 'isOpen must be a boolean' });
+        return;
+      }
+
+      console.log(`[TOGGLE] Calling toggleOutletOpen service method...`);
+      await exchangeService.toggleOutletOpen(outletId, isOpen);
+      console.log(`[TOGGLE] Success!`);
+      res.json({ success: true, outletId, isOpen });
+    } catch (error) {
+      console.error('[TOGGLE] Error toggling outlet:', error);
+      res.status(500).json({ error: 'Failed to toggle outlet status' });
     }
   });
 

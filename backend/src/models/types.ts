@@ -25,6 +25,7 @@ export interface Outlet {
   location: string;
   balance: number;
   marginPercent: number; // Retail markup percentage (e.g., 30 = 30%)
+  isOpen: boolean; // Whether outlet is open for business
   createdAt: Date;
 }
 

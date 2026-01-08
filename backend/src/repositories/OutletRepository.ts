@@ -23,6 +23,7 @@ export class OutletRepository {
     // TypeDB expects datetime in ISO 8601 format without timezone (YYYY-MM-DDTHH:MM:SS.sss)
     const now = new Date().toISOString().replace('Z', '');
     const marginPercent = outlet.marginPercent || 25.0; // Default 25% margin
+    const isOpen = outlet.isOpen !== undefined ? outlet.isOpen : true; // Default to open
     const query = `
       insert
       $outlet isa outlet,
@@ -31,6 +32,7 @@ export class OutletRepository {
         has location "${outlet.location}",
         has balance ${outlet.balance},
         has margin-percent ${marginPercent},
+        has outlet-open ${isOpen},
         has created-at ${now};
     `;
 
@@ -60,6 +62,7 @@ export class OutletRepository {
         location: doc.location,
         balance: doc.balance,
         marginPercent: doc['margin-percent'] || 25.0,
+        isOpen: doc['outlet-open'] !== undefined ? doc['outlet-open'] : true,
         createdAt: new Date(doc['created-at'])
       };
     }
@@ -83,6 +86,7 @@ export class OutletRepository {
         location: doc.location,
         balance: doc.balance,
         marginPercent: doc['margin-percent'] || 25.0,
+        isOpen: doc['outlet-open'] !== undefined ? doc['outlet-open'] : true,
         createdAt: new Date(doc['created-at'])
       }));
     }
@@ -91,13 +95,12 @@ export class OutletRepository {
   }
 
   async updateBalance(outletId: string, newBalance: number): Promise<void> {
-    // TypeDB 3.x: delete just needs the variable, then insert new value
     const query = `
       match
       $outlet isa outlet, has outlet-id "${outletId}";
       $outlet has balance $old_bal;
       delete
-      $old_bal;
+      has $old_bal of $outlet;
       insert
       $outlet has balance ${newBalance};
     `;
@@ -111,9 +114,43 @@ export class OutletRepository {
       $outlet isa outlet, has outlet-id "${outletId}";
       $outlet has margin-percent $old_margin;
       delete
-      $old_margin;
+      has $old_margin of $outlet;
       insert
       $outlet has margin-percent ${newMarginPercent};
+    `;
+
+    await this.getHelper().executeWriteQuery(query);
+  }
+
+  async toggleOpen(outletId: string, isOpen: boolean): Promise<void> {
+    const query = `
+      match
+      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet has outlet-open $old_open;
+      delete
+      has $old_open of $outlet;
+      insert
+      $outlet has outlet-open ${isOpen};
+    `;
+
+    console.log('Toggle query:', query);
+    try {
+      await this.getHelper().executeWriteQuery(query);
+    } catch (error) {
+      console.error('Error in toggleOpen:', error);
+      throw error;
+    }
+  }
+
+  async toggleAllOpen(isOpen: boolean): Promise<void> {
+    const query = `
+      match
+      $outlet isa outlet;
+      $outlet has outlet-open $old_open;
+      delete
+      has $old_open of $outlet;
+      insert
+      $outlet has outlet-open ${isOpen};
     `;
 
     await this.getHelper().executeWriteQuery(query);

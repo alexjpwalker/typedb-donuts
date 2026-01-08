@@ -119,6 +119,14 @@ export class ExchangeService {
     await this.outletRepo.updateMargin(outletId, marginPercent);
   }
 
+  async toggleOutletOpen(outletId: string, isOpen: boolean): Promise<void> {
+    await this.outletRepo.toggleOpen(outletId, isOpen);
+  }
+
+  async toggleAllOutletsOpen(isOpen: boolean): Promise<void> {
+    await this.outletRepo.toggleAllOpen(isOpen);
+  }
+
   async sellToCustomer(outletId: string, donutTypeId: string, quantity: number): Promise<CustomerSale> {
     const outlet = await this.outletRepo.findById(outletId);
     if (!outlet) {
