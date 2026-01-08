@@ -1,0 +1,105 @@
+define
+
+# ==========================================
+# Attributes
+# ==========================================
+
+attribute outlet-id, value string;
+attribute outlet-name, value string;
+attribute location, value string;
+attribute balance, value double;
+
+attribute donut-type-id, value string;
+attribute donut-name, value string;
+attribute description, value string;
+
+attribute order-id, value string;
+attribute quantity, value integer;
+attribute price-per-unit, value double;
+attribute status, value string;
+
+attribute transaction-id, value string;
+attribute total-amount, value double;
+
+attribute match-price, value double;
+attribute match-quantity, value integer;
+
+attribute created-at, value datetime;
+attribute updated-at, value datetime;
+attribute executed-at, value datetime;
+attribute matched-at, value datetime;
+
+# ==========================================
+# Entities
+# ==========================================
+
+entity outlet,
+    owns outlet-id @key,
+    owns outlet-name,
+    owns location,
+    owns balance,
+    owns created-at,
+    plays listing-creation:creator,
+    plays order-placement:placer,
+    plays trade-execution:buyer,
+    plays trade-execution:seller;
+
+entity donut-type,
+    owns donut-type-id @key,
+    owns donut-name,
+    owns description;
+
+entity order @abstract,
+    owns order-id @key,
+    owns quantity,
+    owns price-per-unit,
+    owns status,
+    owns created-at,
+    owns updated-at,
+    plays order-matching:matched-order,
+    plays trade-execution:order,
+    plays order-placement:order;
+
+entity buy-order, sub order,
+    plays order-matching:buy-side;
+
+entity sell-order, sub order,
+    plays order-matching:sell-side,
+    plays listing-creation:listing;
+
+entity transaction,
+    owns transaction-id @key,
+    owns quantity,
+    owns price-per-unit,
+    owns total-amount,
+    owns executed-at,
+    plays trade-execution:trade;
+
+# ==========================================
+# Relations
+# ==========================================
+
+relation listing-creation,
+    relates creator,
+    relates listing,
+    owns donut-type-id;
+
+relation order-placement,
+    relates placer,
+    relates order,
+    owns donut-type-id;
+
+relation order-matching,
+    relates buy-side,
+    relates sell-side,
+    relates matched-order,
+    owns match-price,
+    owns match-quantity,
+    owns matched-at;
+
+relation trade-execution,
+    relates buyer,
+    relates seller,
+    relates trade,
+    relates order,
+    owns donut-type-id;
