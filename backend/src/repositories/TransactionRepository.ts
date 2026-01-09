@@ -37,7 +37,9 @@ export class TransactionRepository {
         has executed-at ${now};
     `;
 
+    const t1 = Date.now();
     await this.getHelper().executeWriteQuery(insertTxn);
+    console.log(`[Timing] Insert transaction: ${Date.now() - t1}ms`);
 
     const insertRelation = `
       match
@@ -51,7 +53,9 @@ export class TransactionRepository {
           has donut-type-id "${transaction.donutTypeId}";
     `;
 
+    const t2 = Date.now();
     await this.getHelper().executeWriteQuery(insertRelation);
+    console.log(`[Timing] Insert trade-execution: ${Date.now() - t2}ms`);
 
     return {
       transactionId,

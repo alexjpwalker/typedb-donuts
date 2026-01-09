@@ -7,8 +7,10 @@ import { OrderSide } from '../models/types.js';
  */
 export class DonutSupplier {
   private exchangeService: ExchangeService;
-  private intervalId: NodeJS.Timeout | null = null;
+  private timeoutId: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private isSupplying = false;
+  private shouldStop = false;
 
   // Supplier configuration
   private readonly SUPPLIER_ID = 'supplier-factory';
@@ -32,22 +34,40 @@ export class DonutSupplier {
     await this.ensureSupplierExists();
 
     this.isRunning = true;
+    this.shouldStop = false;
     console.log('Starting donut supplier (factory)...');
-
-    // Supply donuts periodically
-    this.intervalId = setInterval(async () => {
-      if (!this.isRunning) return;
-      await this.supplyDonuts();
-    }, this.SUPPLY_INTERVAL_MS);
 
     // Initial supply
     await this.supplyDonuts();
+
+    // Schedule periodic supply
+    this.scheduleSupply();
+  }
+
+  private scheduleSupply(): void {
+    if (this.shouldStop) return;
+
+    this.timeoutId = setTimeout(async () => {
+      if (this.isSupplying || this.shouldStop) {
+        this.scheduleSupply();
+        return;
+      }
+
+      this.isSupplying = true;
+      try {
+        await this.supplyDonuts();
+      } finally {
+        this.isSupplying = false;
+        this.scheduleSupply();
+      }
+    }, this.SUPPLY_INTERVAL_MS);
   }
 
   stop(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    this.shouldStop = true;
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
     }
     this.isRunning = false;
     console.log('Donut supplier stopped');

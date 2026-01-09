@@ -13,8 +13,10 @@ import {
  */
 export class PurchasingAgent {
   private exchangeService: ExchangeService;
-  private intervalId: NodeJS.Timeout | null = null;
+  private timeoutId: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private isExecuting = false;
+  private shouldStop = false;
 
   // Store purchasing configs per outlet
   private configs: Map<string, OutletPurchasingConfig> = new Map();
@@ -99,22 +101,40 @@ export class PurchasingAgent {
     }
 
     this.isRunning = true;
+    this.shouldStop = false;
     console.log('Starting purchasing agent...');
 
     // Initialize default strategies
     await this.initializeDefaultStrategies();
 
-    // Periodically execute strategies
-    this.intervalId = setInterval(async () => {
-      if (!this.isRunning) return;
-      await this.executeAllStrategies();
+    // Schedule first execution
+    this.scheduleExecution();
+  }
+
+  private scheduleExecution(): void {
+    if (this.shouldStop) return;
+
+    this.timeoutId = setTimeout(async () => {
+      if (this.isExecuting || this.shouldStop) {
+        this.scheduleExecution();
+        return;
+      }
+
+      this.isExecuting = true;
+      try {
+        await this.executeAllStrategies();
+      } finally {
+        this.isExecuting = false;
+        this.scheduleExecution();
+      }
     }, this.CHECK_INTERVAL_MS);
   }
 
   stop(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    this.shouldStop = true;
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
     }
     this.isRunning = false;
     console.log('Purchasing agent stopped');
