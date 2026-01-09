@@ -19,9 +19,17 @@ async function resetDatabase() {
   try {
     // Delete the database if it exists
     console.log(`Deleting database: ${database}...`);
-    const deleteResponse = await driver.deleteDatabase(database);
-    console.log('Delete response:', deleteResponse);
-    console.log(`Database ${database} deleted successfully`);
+    const deleteResponse = await driver.deleteDatabase(database) as any;
+
+    if (deleteResponse?.err) {
+      console.error('Delete failed:', deleteResponse.err.message);
+      if (deleteResponse.err.code === 'DBD2') {
+        console.error('Database is in use. Make sure the server is stopped and wait a few seconds.');
+        process.exit(1);
+      }
+    } else {
+      console.log(`Database ${database} deleted successfully`);
+    }
   } catch (error) {
     console.log(`Database ${database} might not exist, continuing...`);
   }

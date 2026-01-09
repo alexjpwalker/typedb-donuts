@@ -130,3 +130,34 @@ export interface TradeMatch {
   matchQuantity: number;
   matchPrice: number;
 }
+
+// ==========================================
+// Purchasing Strategy
+// ==========================================
+
+/**
+ * A single threshold tier in a purchasing strategy.
+ * If current stock < targetStock and price <= maxPrice, buy to reach targetStock.
+ */
+export interface PurchasingThreshold {
+  maxPrice: number;      // Maximum price willing to pay at this tier
+  targetStock: number;   // Target stock level for this tier
+}
+
+/**
+ * An outlet's purchasing strategy for a specific donut type.
+ * Thresholds should be ordered from lowest maxPrice to highest (most aggressive first).
+ */
+export interface PurchasingStrategy {
+  donutTypeId: string;
+  thresholds: PurchasingThreshold[];  // Ordered by maxPrice ascending
+}
+
+/**
+ * Complete purchasing configuration for an outlet.
+ */
+export interface OutletPurchasingConfig {
+  outletId: string;
+  strategies: PurchasingStrategy[];  // One per donut type
+  enabled: boolean;                   // Whether auto-purchasing is enabled
+}

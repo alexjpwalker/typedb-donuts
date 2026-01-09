@@ -156,7 +156,9 @@ export class ExchangeService {
   }
 
   async getAllOutlets(): Promise<Outlet[]> {
-    return await this.outletRepo.findAll();
+    const outlets = await this.outletRepo.findAll();
+    // Filter out the supplier factory - it's internal infrastructure, not a retail outlet
+    return outlets.filter(o => o.outletId !== 'supplier-factory');
   }
 
   // ==========================================
@@ -269,7 +271,10 @@ export class ExchangeService {
   async getLeaderboard(): Promise<OutletStats[]> {
     const outlets = await this.outletRepo.findAll();
 
-    const leaderboard = outlets.map(outlet => {
+    // Filter out the supplier factory - it's not a competing outlet
+    const retailOutlets = outlets.filter(o => o.outletId !== 'supplier-factory');
+
+    const leaderboard = retailOutlets.map(outlet => {
       const stats = this.getOrCreateStats(outlet.outletId);
       const netProfit = outlet.balance - 10000; // Starting balance was 10000
       return {

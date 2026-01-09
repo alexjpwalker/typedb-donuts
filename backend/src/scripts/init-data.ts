@@ -40,10 +40,12 @@ async function initData() {
   await createDonutType('jelly', 'Jelly Filled', 'Strawberry jelly filled donut');
 
   console.log('\nCreating outlets with different margin strategies...');
-  // All outlets start closed and with no inventory
+  // All retail outlets start closed and with no inventory
   await createOutlet('outlet-1', 'Downtown Donuts', '123 Main St', 10000, 20, false);
   await createOutlet('outlet-2', 'Uptown Bakery', '456 Oak Ave', 10000, 35, false);
   await createOutlet('outlet-3', 'Sweet Treats Shop', '789 Maple Dr', 10000, 50, false);
+
+  // Note: supplier-factory is created automatically by the DonutSupplier service on server startup
 
   console.log('\n✅ Sample data initialized!');
   console.log('Outlets start CLOSED with NO inventory.');

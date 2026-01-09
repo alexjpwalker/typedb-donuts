@@ -177,6 +177,10 @@
     color: #10b981;
   }
 
+  .quantity {
+    color: #374151;
+  }
+
   .time {
     color: #666;
     font-size: 0.8rem;

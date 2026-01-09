@@ -59,8 +59,20 @@ export class TransactionHelper {
       transactionType
     );
 
+    // Check for error response
     if ('error' in openResponse) {
       throw new Error(`Failed to open transaction: ${openResponse.error.message}`);
+    }
+
+    // Check for 'err' property (alternative error format)
+    if ('err' in openResponse) {
+      throw new Error(`Failed to open transaction: ${(openResponse as any).err.message}`);
+    }
+
+    // Check for missing ok property
+    if (!openResponse.ok) {
+      console.error('Unexpected response format:', JSON.stringify(openResponse));
+      throw new Error(`Unexpected response format from openTransaction`);
     }
 
     const transactionId = openResponse.ok.transactionId;

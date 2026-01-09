@@ -119,7 +119,13 @@ export class TypeDBConnection {
     } catch (error) {
       // If error checking, try to load schema anyway
       console.log('Unable to check schema, attempting to load...');
-      await this.loadSchema();
+      try {
+        await this.loadSchema();
+      } catch (loadError) {
+        // Schema loading failed - this might be due to timeouts
+        // If database already exists, assume schema is present and continue
+        console.warn('Schema loading failed, assuming schema already exists:', loadError);
+      }
     }
   }
 

@@ -4,6 +4,8 @@ import { createServer, Server as HTTPServer } from 'http';
 import { TypeDBConnection } from './config/typedb.js';
 import { ExchangeService } from './services/ExchangeService.js';
 import { CustomerSimulator } from './services/CustomerSimulator.js';
+import { DonutSupplier } from './services/DonutSupplier.js';
+import { PurchasingAgent } from './services/PurchasingAgent.js';
 import { createRoutes } from './api/routes.js';
 import { WebSocketManager } from './api/websocket.js';
 
@@ -15,6 +17,8 @@ class DonutExchangeServer {
   private connection: TypeDBConnection;
   private exchangeService: ExchangeService;
   private customerSimulator: CustomerSimulator;
+  private donutSupplier: DonutSupplier;
+  private purchasingAgent: PurchasingAgent;
   private wsManager: WebSocketManager | null = null;
 
   constructor() {
@@ -23,6 +27,8 @@ class DonutExchangeServer {
     this.connection = TypeDBConnection.getInstance();
     this.exchangeService = new ExchangeService();
     this.customerSimulator = new CustomerSimulator(this.exchangeService);
+    this.donutSupplier = new DonutSupplier(this.exchangeService);
+    this.purchasingAgent = new PurchasingAgent(this.exchangeService);
 
     this.setupMiddleware();
     this.setupRoutes();
@@ -93,6 +99,14 @@ class DonutExchangeServer {
         console.log(`[Customer] ${event.message}`);
       });
 
+      // Start donut supplier (factory)
+      console.log('Starting donut supplier...');
+      await this.donutSupplier.start();
+
+      // Start purchasing agent
+      console.log('Starting purchasing agent...');
+      await this.purchasingAgent.start();
+
       // Start customer simulator
       console.log('Starting customer simulator...');
       await this.customerSimulator.start();
@@ -106,6 +120,8 @@ class DonutExchangeServer {
         console.log(`📡  HTTP API: http://localhost:${PORT}`);
         console.log(`🔌  WebSocket: ws://localhost:${PORT}/ws`);
         console.log(`📊  Health: http://localhost:${PORT}/api/health`);
+        console.log(`🏭  Donut Supplier: ACTIVE (factory supplies every 5s)`);
+        console.log(`🛒  Purchasing Agent: ACTIVE (outlets auto-buy)`);
         console.log(`👥  Customer Simulator: ACTIVE (1-10 customers/sec)`);
         console.log('='.repeat(60));
         console.log('');
@@ -127,6 +143,12 @@ class DonutExchangeServer {
     try {
       // Stop customer simulator
       this.customerSimulator.stop();
+
+      // Stop purchasing agent
+      this.purchasingAgent.stop();
+
+      // Stop donut supplier
+      this.donutSupplier.stop();
 
       // Close WebSocket connections
       if (this.wsManager) {
