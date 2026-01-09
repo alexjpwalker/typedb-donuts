@@ -1,237 +1,216 @@
-# 🍩 Donut Exchange
+# TypeDB Donuts
 
-A real-time order book exchange for donut outlets, built with TypeDB 3.x, Node.js, TypeScript, and Svelte.
+A fully autonomous donut economy simulation powered by TypeDB 3.x. Watch a central factory supply donuts to retail outlets competing on High Street, all through a real-time exchange.
 
-## Overview
+## Concept
 
-The Donut Exchange is a global marketplace where donut outlets can trade donuts through an automated order book matching engine. Buy and sell orders are matched in real-time using price-time priority, with automatic settlement and balance updates.
+**TypeDB Donuts** simulates a complete supply chain:
+
+1. **The Factory** produces donuts and sells them on a central exchange
+2. **Retail Outlets** buy donuts from the exchange and sell to customers
+3. **Customers** visit outlets and purchase donuts at retail prices
+4. **The Leaderboard** tracks which outlet makes the most profit
+
+Everything runs autonomously - there's no manual trading. You simply watch the economy unfold and can tweak parameters like opening/closing outlets or the factory.
+
+## The Simulation
+
+### Factory (Donut Supplier)
+
+The factory is the sole producer of donuts. It:
+- Produces donuts every 3 seconds at prices around $2.00 (+/- $0.50)
+- Places sell orders on the exchange for outlets to buy
+- Has **auto-regulation**: pauses production when 20+ orders are waiting, resumes when orders drop to 10
+- Can be manually opened/closed via the UI
+
+### Retail Outlets
+
+Each outlet operates as an independent business:
+- Starts with $1,000 in capital
+- Has a **retail margin** (20-50%) that determines markup when selling to customers
+- Automatically buys inventory from the exchange using smart purchasing strategies
+- Sells to customers at cost + margin (e.g., a $2.00 donut sells for $2.50 at 25% margin)
+
+**Purchasing Strategy**: Outlets use tiered thresholds:
+- Buy cheap donuts (< $1.60) aggressively to build stock
+- Buy fair-priced donuts (< $2.00) to maintain stock
+- Buy expensive donuts (< $2.40) only when running low
+- Emergency buy (< $3.00) when nearly out of stock
+
+Low-margin outlets (high volume, low profit per sale) buy more aggressively. High-margin outlets (selective, high profit per sale) are pickier.
+
+### Simulated Customers
+
+Virtual customers arrive every 2 seconds, each wanting 1-3 donuts:
+
+- **First-Find Customers** (50%): Buy from the first outlet with stock
+- **Price Hunters** (50%): Compare all outlets and buy from the cheapest
+
+Customers can only buy from **open** outlets that have **inventory**.
+
+### The Exchange
+
+A price-time priority order book matching engine:
+- Factory places **sell orders**
+- Outlets place **buy orders**
+- Orders match automatically at the best available price
+- Settlement is instant: money and inventory transfer immediately
 
 ## Features
 
-- 🎯 **Order Book Matching** - Automatic price-time priority matching
-- 💹 **Real-time Updates** - WebSocket integration for live market data
-- 🍩 **Multi-Donut Trading** - Support for different donut types
-- 💰 **Instant Settlement** - Automatic balance updates on trade execution
-- 📊 **Transaction History** - Complete trade history tracking
-- 🎨 **Modern UI** - Beautiful Svelte frontend with responsive design
-- 🗄️ **TypeDB 3.x** - Graph database for complex relationship modeling
+- **Fully Autonomous**: No manual intervention required - watch the economy run
+- **Real-time Updates**: WebSocket integration for live market data
+- **Performance Leaderboard**: Track which outlet strategy wins
+- **Factory Auto-regulation**: Production responds to market demand
+- **Outlet Controls**: Open/close individual outlets or all at once
+- **Multi-Donut Types**: Trade different varieties (Glazed, Chocolate, etc.)
+- **TypeDB 3.x**: Graph database for complex relationship modeling
 
 ## Project Structure
 
 ```
 typedb-hackathon-2026/
-├── backend/                # Node.js/TypeScript backend
+├── backend/                 # Node.js/TypeScript backend
 │   ├── src/
-│   │   ├── config/        # TypeDB connection
-│   │   ├── schema/        # TypeDB schema (.tql)
-│   │   ├── models/        # TypeScript types
-│   │   ├── repositories/  # Data access layer
-│   │   ├── services/      # Business logic
-│   │   ├── engine/        # Matching engine
-│   │   ├── api/           # REST + WebSocket
-│   │   └── server.ts      # Entry point
-│   └── README.md
-└── src/                    # Svelte frontend
+│   │   ├── config/         # TypeDB connection, constants
+│   │   ├── schema/         # TypeDB schema
+│   │   ├── models/         # TypeScript types
+│   │   ├── repositories/   # Data access layer
+│   │   ├── services/       # Business logic
+│   │   │   ├── ExchangeService.ts    # Core exchange operations
+│   │   │   ├── DonutSupplier.ts      # Factory production
+│   │   │   ├── PurchasingAgent.ts    # Outlet buying strategies
+│   │   │   └── CustomerSimulator.ts  # Customer simulation
+│   │   ├── engine/         # Order matching engine
+│   │   └── api/            # REST + WebSocket
+│   └── package.json
+└── src/                     # Svelte frontend
     ├── lib/
-    │   ├── components/    # UI components
-    │   ├── api.ts         # API client
-    │   ├── websocket.ts   # WebSocket client
-    │   ├── stores.ts      # State management
-    │   └── types.ts       # TypeScript types
-    └── App.svelte         # Main component
+    │   ├── components/     # UI components
+    │   ├── stores.ts       # State management
+    │   └── types.ts        # TypeScript types
+    └── App.svelte
 ```
 
 ## Prerequisites
 
 - Node.js 18+
-- TypeDB 3.x (Core or Cloud)
+- TypeDB 3.x running locally or in the cloud
 
 ## Quick Start
 
 ### 1. Install Dependencies
 
 ```bash
-# Install frontend dependencies
+# Frontend
 npm install
 
-# Install backend dependencies
-cd backend
-npm install
-cd ..
+# Backend
+cd backend && npm install
 ```
 
 ### 2. Configure TypeDB
 
-**For TypeDB Core (local):**
-
 Edit `backend/.env`:
+
 ```env
+# For local TypeDB Core
 TYPEDB_CLOUD=false
 TYPEDB_ADDRESS=localhost:1729
 TYPEDB_DATABASE=donut-exchange
+
+# For TypeDB Cloud (uncomment and fill in)
+# TYPEDB_CLOUD=true
+# TYPEDB_ADDRESS=your-instance.cloud.typedb.com:1729
+# TYPEDB_USERNAME=your-username
+# TYPEDB_PASSWORD=your-password
+# TYPEDB_TLS_ENABLED=true
 ```
 
-**For TypeDB Cloud:**
-
-Edit `backend/.env`:
-```env
-TYPEDB_CLOUD=true
-TYPEDB_ADDRESS=your-instance.cloud.typedb.com:1729
-TYPEDB_USERNAME=your-username
-TYPEDB_PASSWORD=your-password
-TYPEDB_DATABASE=donut-exchange
-TYPEDB_TLS_ENABLED=true
-```
-
-### 3. Set Up Database Schema
+### 3. Initialize Database
 
 ```bash
 cd backend
 npm run setup-schema
+npm run init-data
 ```
 
-### 4. Start Backend Server
+### 4. Start Services
 
+Terminal 1 - Backend:
 ```bash
-cd backend
-npm run dev
+cd backend && npm run dev
 ```
 
-Backend runs on http://localhost:3000
-
-### 5. Start Frontend Dev Server
-
-In a new terminal:
-
+Terminal 2 - Frontend:
 ```bash
 npm run dev
 ```
 
-Frontend runs on http://localhost:5173
+Open http://localhost:5173 to watch the simulation.
 
-## Usage
+## UI Overview
 
-### Initialize Data
+### Factory Control
+Shows factory status with two states:
+- **OPEN/CLOSED**: Manual control - is the factory enabled?
+- **PRODUCING/PAUSED**: Auto-regulation - is production active?
 
-Before trading, you need to create outlets and donut types. Use the API:
+Displays active order count and thresholds for auto-regulation.
 
-```bash
-# Create a donut type
-curl -X POST http://localhost:3000/api/donut-types \
-  -H "Content-Type: application/json" \
-  -d '{
-    "donutTypeId": "glazed",
-    "donutName": "Glazed Donut",
-    "description": "Classic glazed donut"
-  }'
+### Outlet Dashboard
+Grid of retail outlets showing:
+- Current balance
+- Retail margin percentage
+- Inventory by donut type
+- Open/closed status with toggle controls
 
-# Create an outlet
-curl -X POST http://localhost:3000/api/outlets \
-  -H "Content-Type: application/json" \
-  -d '{
-    "outletId": "outlet-1",
-    "outletName": "Downtown Donuts",
-    "location": "123 Main St",
-    "balance": 10000
-  }'
-```
+### Leaderboard
+Ranks outlets by net profit:
+- Customer sales revenue (selling to customers)
+- Exchange sales (selling excess inventory back)
+- Net profit since start
 
-### Trading
+### Order Book
+Live view of buy and sell orders:
+- Filter by donut type
+- Shows price, quantity, and time
+- Toggle to show/hide filled orders
 
-1. Open http://localhost:5173 in your browser
-2. Select an outlet (your trading identity)
-3. Select a donut type to trade
-4. View the order book showing current bids and asks
-5. Place buy or sell orders
-6. Watch trades execute in real-time
-7. View transaction history
+### Transaction History
+Recent trades executed on the exchange.
 
-## How It Works
+## Configuration
 
-### Order Book Matching
+Key constants in `backend/src/config/constants.ts`:
 
-The exchange uses a **price-time priority** algorithm:
+| Constant                   | Default | Description                                  |
+|----------------------------|---------|----------------------------------------------|
+| `OUTLET_STARTING_BALANCE`  | 1000    | Initial funds for each outlet                |
+| `FACTORY_PAUSE_THRESHOLD`  | 20      | Pause production at this many active orders  |
+| `FACTORY_RESUME_THRESHOLD` | 10      | Resume production at this many active orders |
 
-- **Buy orders** are sorted by price (highest first), then by time
-- **Sell orders** are sorted by price (lowest first), then by time
-- New orders are immediately matched against the best available opposite orders
-- Trades execute at the **maker's price** (existing order price)
-- Partial fills are supported - remaining quantity stays in the order book
+## How Profit Works
 
-### Example Trading Scenario
+An outlet's profit depends on:
 
-1. **Outlet A** places a sell order: 100 donuts @ $2.50
-2. **Outlet B** places a buy order: 50 donuts @ $2.60
-3. **Match occurs!** 50 donuts trade at $2.50 (seller's price)
-4. Outlet A's sell order is partially filled (50 remaining @ $2.50)
-5. Outlet B's buy order is fully filled
-6. $125 transferred from Outlet B to Outlet A
-7. Both outlets' balances update instantly
+1. **Buying low**: Getting donuts from the exchange at good prices
+2. **Selling high**: Having customers buy at retail (cost + margin)
+3. **Inventory management**: Not running out of stock (lost sales) or overstocking (tied-up capital)
 
-## API Endpoints
-
-### Donut Types
-- `GET /api/donut-types` - List all donut types
-- `POST /api/donut-types` - Create donut type
-
-### Outlets
-- `GET /api/outlets` - List all outlets
-- `POST /api/outlets` - Create outlet
-
-### Orders
-- `POST /api/orders` - Place order (triggers matching)
-- `GET /api/orders/:id` - Get order details
-- `GET /api/order-book/:donutTypeId` - Get order book
-
-### Transactions
-- `GET /api/transactions` - Get recent transactions
-- `GET /api/transactions/donut-type/:donutTypeId` - Get transactions by donut type
-
-### WebSocket
-Connect to `ws://localhost:3000/ws` for real-time events:
-- `order_created` - New order placed
-- `order_updated` - Order status changed
-- `trade_executed` - Trade completed
-- `order_book_updated` - Order book updated
-
-## Development
-
-### Frontend
-```bash
-npm run dev    # Development server with HMR
-npm run build  # Production build
-```
-
-### Backend
-```bash
-cd backend
-npm run dev    # Development with hot reload
-npm run build  # Compile TypeScript
-npm start      # Run production build
-```
+Example:
+- Outlet buys donut for $1.80 from exchange
+- Outlet has 25% margin
+- Customer pays $2.25 ($1.80 × 1.25)
+- Profit: $0.45 per donut
 
 ## Tech Stack
 
-### Backend
-- **TypeDB 3.x** - Graph database
-- **Node.js + TypeScript** - Runtime & language
-- **Express** - HTTP server
-- **ws** - WebSocket server
-- **@typedb/driver-http** - TypeDB 3.x driver
+**Backend**: Node.js, TypeScript, Express, WebSocket, TypeDB 3.x HTTP driver
 
-### Frontend
-- **Svelte 5** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool & dev server
+**Frontend**: Svelte 5, TypeScript, Vite
 
-## Architecture Highlights
-
-- **Separation of Concerns** - Backend runs independently of frontend
-- **Real-time Communication** - WebSocket for instant updates
-- **Type Safety** - Full TypeScript coverage
-- **Graph Database** - TypeDB models complex relationships naturally
-- **Reactive UI** - Svelte stores for state management
-- **Order Book Engine** - Efficient matching algorithm
+**Database**: TypeDB 3.x with TypeQL
 
 ## License
 
