@@ -60,13 +60,13 @@ export class CustomerSimulator {
     }
 
     this.isRunning = true;
-    console.log('Starting customer simulator (1-10 customers/second)...');
+    console.log('Starting customer simulator (1-3 customers/second)...');
 
     // Spawn customers every second
     this.intervalId = setInterval(async () => {
       if (!this.isRunning) return;
 
-      const numCustomers = Math.floor(Math.random() * 10) + 1; // 1-10 customers
+      const numCustomers = Math.floor(Math.random() * 3) + 1; // 1-3 customers
 
       for (let i = 0; i < numCustomers; i++) {
         // Spawn each customer with a small random delay within the second

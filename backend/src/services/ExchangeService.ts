@@ -2,10 +2,12 @@ import { OrderRepository } from '../repositories/OrderRepository.js';
 import { TransactionRepository } from '../repositories/TransactionRepository.js';
 import { OutletRepository } from '../repositories/OutletRepository.js';
 import { DonutTypeRepository } from '../repositories/DonutTypeRepository.js';
+import { InventoryRepository } from '../repositories/InventoryRepository.js';
+import { CustomerSaleRepository } from '../repositories/CustomerSaleRepository.js';
 import { MatchingEngine } from '../engine/MatchingEngine.js';
 import { CreateOrderRequest, Order, OrderBook, Transaction, Outlet, DonutType, OutletStats, CustomerSale } from '../models/types.js';
 
-// In-memory tracking for sales statistics
+// Cache for sales statistics (backed by DB)
 interface OutletSalesStats {
   customerSalesRevenue: number;
   customerSalesCount: number;
@@ -13,7 +15,7 @@ interface OutletSalesStats {
   exchangeSalesCount: number;
 }
 
-// Inventory: outletId -> donutTypeId -> quantity
+// In-memory cache for inventory (synced with DB)
 type InventoryMap = Map<string, Map<string, number>>;
 
 export class ExchangeService {
@@ -21,67 +23,131 @@ export class ExchangeService {
   private transactionRepo: TransactionRepository;
   private outletRepo: OutletRepository;
   private donutTypeRepo: DonutTypeRepository;
+  private inventoryRepo: InventoryRepository;
+  private customerSaleRepo: CustomerSaleRepository;
   private matchingEngine: MatchingEngine;
 
-  // Track sales stats per outlet (in-memory for now)
-  private salesStats: Map<string, OutletSalesStats> = new Map();
+  // Cache for sales stats per outlet (backed by DB)
+  private salesStatsCache: Map<string, OutletSalesStats> = new Map();
 
-  // Track inventory per outlet per donut type
-  private inventory: InventoryMap = new Map();
+  // Cache for inventory (backed by DB)
+  private inventoryCache: InventoryMap = new Map();
 
   constructor() {
     this.orderRepo = new OrderRepository();
     this.transactionRepo = new TransactionRepository();
     this.outletRepo = new OutletRepository();
     this.donutTypeRepo = new DonutTypeRepository();
+    this.inventoryRepo = new InventoryRepository();
+    this.customerSaleRepo = new CustomerSaleRepository();
     this.matchingEngine = new MatchingEngine();
   }
 
   private getOrCreateStats(outletId: string): OutletSalesStats {
-    if (!this.salesStats.has(outletId)) {
-      this.salesStats.set(outletId, {
+    if (!this.salesStatsCache.has(outletId)) {
+      this.salesStatsCache.set(outletId, {
         customerSalesRevenue: 0,
         customerSalesCount: 0,
         exchangeSalesRevenue: 0,
         exchangeSalesCount: 0
       });
     }
-    return this.salesStats.get(outletId)!;
+    return this.salesStatsCache.get(outletId)!;
   }
 
-  private getInventory(outletId: string, donutTypeId: string): number {
-    const outletInventory = this.inventory.get(outletId);
+  private getInventoryFromCache(outletId: string, donutTypeId: string): number {
+    const outletInventory = this.inventoryCache.get(outletId);
     if (!outletInventory) return 0;
     return outletInventory.get(donutTypeId) || 0;
   }
 
-  private addInventory(outletId: string, donutTypeId: string, quantity: number): void {
-    if (!this.inventory.has(outletId)) {
-      this.inventory.set(outletId, new Map());
+  private updateCache(outletId: string, donutTypeId: string, quantity: number): void {
+    if (!this.inventoryCache.has(outletId)) {
+      this.inventoryCache.set(outletId, new Map());
     }
-    const outletInventory = this.inventory.get(outletId)!;
-    const current = outletInventory.get(donutTypeId) || 0;
-    outletInventory.set(donutTypeId, current + quantity);
+    this.inventoryCache.get(outletId)!.set(donutTypeId, quantity);
   }
 
-  private removeInventory(outletId: string, donutTypeId: string, quantity: number): boolean {
-    const current = this.getInventory(outletId, donutTypeId);
+  private async addInventory(outletId: string, donutTypeId: string, quantity: number): Promise<void> {
+    const current = this.getInventoryFromCache(outletId, donutTypeId);
+    const newQty = current + quantity;
+    this.updateCache(outletId, donutTypeId, newQty);
+    // Persist to DB (with retry on conflict)
+    try {
+      await this.inventoryRepo.setInventory(outletId, donutTypeId, newQty);
+    } catch (error) {
+      console.error(`Error persisting inventory add for ${outletId}/${donutTypeId}:`, error);
+      // Retry once after a short delay
+      setTimeout(async () => {
+        try {
+          await this.inventoryRepo.setInventory(outletId, donutTypeId, this.getInventoryFromCache(outletId, donutTypeId));
+        } catch (retryError) {
+          console.error(`Retry failed for inventory ${outletId}/${donutTypeId}:`, retryError);
+        }
+      }, 500);
+    }
+  }
+
+  private async removeInventory(outletId: string, donutTypeId: string, quantity: number): Promise<boolean> {
+    const current = this.getInventoryFromCache(outletId, donutTypeId);
     if (current < quantity) return false;
-    const outletInventory = this.inventory.get(outletId)!;
-    outletInventory.set(donutTypeId, current - quantity);
+    const newQty = current - quantity;
+    this.updateCache(outletId, donutTypeId, newQty);
+    // Persist to DB (with retry on conflict)
+    try {
+      await this.inventoryRepo.setInventory(outletId, donutTypeId, newQty);
+    } catch (error) {
+      console.error(`Error persisting inventory remove for ${outletId}/${donutTypeId}:`, error);
+      // Retry once after a short delay
+      setTimeout(async () => {
+        try {
+          await this.inventoryRepo.setInventory(outletId, donutTypeId, this.getInventoryFromCache(outletId, donutTypeId));
+        } catch (retryError) {
+          console.error(`Retry failed for inventory ${outletId}/${donutTypeId}:`, retryError);
+        }
+      }, 500);
+    }
     return true;
   }
 
+  private async loadInventoryFromDB(): Promise<void> {
+    console.log('Loading inventory from database...');
+    const allInventory = await this.inventoryRepo.getAllInventory();
+    for (const record of allInventory) {
+      this.updateCache(record.outletId, record.donutTypeId, record.quantity);
+    }
+    console.log(`Loaded ${allInventory.length} inventory records from database`);
+  }
+
+  private async loadSalesStatsFromDB(): Promise<void> {
+    console.log('Loading sales stats from database...');
+    // Load customer sales stats
+    const customerStats = await this.customerSaleRepo.getAllOutletSalesStats();
+    for (const [outletId, stats] of customerStats) {
+      const outletStats = this.getOrCreateStats(outletId);
+      outletStats.customerSalesRevenue = stats.revenue;
+      outletStats.customerSalesCount = stats.count;
+    }
+    console.log(`Loaded customer sales stats for ${customerStats.size} outlets`);
+
+    // Exchange sales stats are already tracked via transactions in DB
+    // We could load from trade-execution relations if needed
+  }
+
   async start(): Promise<void> {
+    // Load state from database first
+    await this.loadInventoryFromDB();
+    await this.loadSalesStatsFromDB();
+
     // Subscribe to trade events for stats and inventory tracking
-    this.matchingEngine.onTradeExecuted((event) => {
+    this.matchingEngine.onTradeExecuted(async (event) => {
       // Track exchange sale for the seller
       const sellerStats = this.getOrCreateStats(event.sellerOutletId);
       sellerStats.exchangeSalesRevenue += event.totalAmount;
       sellerStats.exchangeSalesCount += 1;
 
-      // Add inventory to the buyer
-      this.addInventory(event.buyerOutletId, event.donutTypeId, event.quantity);
+      // Add inventory to the buyer (persisted to DB)
+      await this.addInventory(event.buyerOutletId, event.donutTypeId, event.quantity);
       console.log(`📦 Inventory: ${event.buyerOutletId} received ${event.quantity} ${event.donutTypeId} donuts`);
     });
 
@@ -206,11 +272,11 @@ export class ExchangeService {
   }
 
   getOutletInventory(outletId: string, donutTypeId: string): number {
-    return this.getInventory(outletId, donutTypeId);
+    return this.getInventoryFromCache(outletId, donutTypeId);
   }
 
   getAllOutletInventory(outletId: string): Map<string, number> {
-    return this.inventory.get(outletId) || new Map();
+    return this.inventoryCache.get(outletId) || new Map();
   }
 
   async sellToCustomer(outletId: string, donutTypeId: string, quantity: number): Promise<CustomerSale> {
@@ -219,14 +285,14 @@ export class ExchangeService {
       throw new Error('Outlet not found');
     }
 
-    // Check inventory
-    const available = this.getInventory(outletId, donutTypeId);
+    // Check inventory from cache
+    const available = this.getInventoryFromCache(outletId, donutTypeId);
     if (available < quantity) {
       throw new Error(`Insufficient inventory: ${available} ${donutTypeId} available, ${quantity} requested`);
     }
 
-    // Remove from inventory
-    this.removeInventory(outletId, donutTypeId, quantity);
+    // Remove from inventory (persisted to DB)
+    await this.removeInventory(outletId, donutTypeId, quantity);
 
     // Simplified: assume outlet bought donuts at $2/unit on the exchange
     // In reality, we'd track actual inventory cost basis
@@ -245,9 +311,9 @@ export class ExchangeService {
     console.log(`🛒 Customer Sale: ${outlet.outletName} sold ${quantity} ${donutTypeId} donuts (${available - quantity} remaining)`);
     console.log(`   Cost: $${costBasis.toFixed(2)}, Revenue: $${revenue.toFixed(2)}, Profit: $${profit.toFixed(2)} (${outlet.marginPercent}% margin)`);
 
-    // Return sale record (simplified - not persisting to DB for now)
-    return {
-      saleId: `sale-${Date.now()}`,
+    // Create and persist sale record
+    const sale: CustomerSale = {
+      saleId: `sale-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       outletId,
       donutTypeId,
       quantity,
@@ -256,6 +322,13 @@ export class ExchangeService {
       profit,
       executedAt: new Date()
     };
+
+    // Persist to DB (fire and forget to not slow down sales)
+    this.customerSaleRepo.create(sale).catch(err => {
+      console.error('Error persisting customer sale:', err);
+    });
+
+    return sale;
   }
 
   async getOutletStats(outletId: string): Promise<OutletStats> {

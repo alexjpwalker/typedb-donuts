@@ -16,9 +16,9 @@ export class DonutSupplier {
   private readonly SUPPLIER_ID = 'supplier-factory';
   private readonly BASE_PRICE = 2.00;
   private readonly PRICE_VARIANCE = 0.50; // +/- $0.50
-  private readonly MIN_QUANTITY = 10;
-  private readonly MAX_QUANTITY = 50;
-  private readonly SUPPLY_INTERVAL_MS = 5000; // Every 5 seconds
+  private readonly MIN_QUANTITY = 20;
+  private readonly MAX_QUANTITY = 80;
+  private readonly SUPPLY_INTERVAL_MS = 3000; // Every 3 seconds
 
   constructor(exchangeService: ExchangeService) {
     this.exchangeService = exchangeService;
