@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { OUTLET_STARTING_BALANCE } from '../config/constants.js';
 
 dotenv.config();
 
@@ -41,9 +42,9 @@ async function initData() {
 
   console.log('\nCreating outlets with different margin strategies...');
   // All retail outlets start closed and with no inventory
-  await createOutlet('outlet-1', 'Downtown Donuts', '123 Main St', 10000, 20, false);
-  await createOutlet('outlet-2', 'Uptown Bakery', '456 Oak Ave', 10000, 35, false);
-  await createOutlet('outlet-3', 'Sweet Treats Shop', '789 Maple Dr', 10000, 50, false);
+  await createOutlet('outlet-1', 'Downtown Donuts', '123 Main St', OUTLET_STARTING_BALANCE, 20, false);
+  await createOutlet('outlet-2', 'Uptown Bakery', '456 Oak Ave', OUTLET_STARTING_BALANCE, 35, false);
+  await createOutlet('outlet-3', 'Sweet Treats Shop', '789 Maple Dr', OUTLET_STARTING_BALANCE, 50, false);
 
   // Note: supplier-factory is created automatically by the DonutSupplier service on server startup
 

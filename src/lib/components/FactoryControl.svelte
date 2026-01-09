@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { factory, toggleFactory, refreshFactory } from '../stores';
+  import { factoryStatus, toggleFactory, refreshFactory } from '../stores';
 
   let toggling = false;
 
   async function handleToggle() {
-    if (!$factory || toggling) return;
+    if (!$factoryStatus || toggling) return;
 
     toggling = true;
     try {
-      await toggleFactory(!$factory.isOpen);
+      await toggleFactory(!$factoryStatus.factory.isOpen);
     } catch (err) {
       console.error('Failed to toggle factory:', err);
     } finally {
@@ -19,12 +19,21 @@
   // Refresh factory status periodically
   const refreshInterval = setInterval(() => {
     refreshFactory();
-  }, 5000);
+  }, 2000);
 
   import { onDestroy } from 'svelte';
   onDestroy(() => {
     clearInterval(refreshInterval);
   });
+
+  // Derived state for display
+  $: factory = $factoryStatus?.factory;
+  $: isEnabled = factory?.isOpen ?? false;
+  $: isProducing = factory?.productionEnabled ?? false;
+  $: actuallyProducing = isEnabled && isProducing;
+  $: activeOrders = $factoryStatus?.activeOrders ?? 0;
+  $: pauseThreshold = $factoryStatus?.pauseThreshold ?? 20;
+  $: resumeThreshold = $factoryStatus?.resumeThreshold ?? 10;
 </script>
 
 <div class="factory-control">
@@ -33,34 +42,53 @@
     <span class="factory-location">Industrial District</span>
   </div>
 
-  {#if $factory}
+  {#if $factoryStatus}
     <div class="factory-status">
-      <div class="status-indicator" class:open={$factory.isOpen} class:closed={!$factory.isOpen}>
-        {$factory.isOpen ? 'PRODUCING' : 'STOPPED'}
+      <div class="status-badges">
+        <div class="status-indicator" class:enabled={isEnabled} class:disabled={!isEnabled}>
+          {isEnabled ? 'ENABLED' : 'DISABLED'}
+        </div>
+        {#if isEnabled}
+          <div class="production-indicator" class:producing={isProducing} class:paused={!isProducing}>
+            {isProducing ? 'PRODUCING' : 'PAUSED'}
+          </div>
+        {/if}
       </div>
       <button
         class="toggle-btn"
-        class:stop={$factory.isOpen}
-        class:start={!$factory.isOpen}
+        class:stop={isEnabled}
+        class:start={!isEnabled}
         on:click={handleToggle}
         disabled={toggling}
       >
         {#if toggling}
           ...
-        {:else if $factory.isOpen}
-          Stop Production
+        {:else if isEnabled}
+          Disable Factory
         {:else}
-          Start Production
+          Enable Factory
         {/if}
       </button>
     </div>
     <p class="factory-info">
-      {#if $factory.isOpen}
-        Factory is supplying donuts to the exchange every 5 seconds.
+      {#if !isEnabled}
+        Factory is disabled. Enable it to allow production.
+      {:else if actuallyProducing}
+        Factory is supplying donuts to the exchange.
       {:else}
-        Factory is idle. No new supply entering the market.
+        Factory is enabled but production is auto-paused (too many orders in queue).
       {/if}
     </p>
+    {#if isEnabled}
+      <p class="factory-note">
+        Active orders: <strong>{activeOrders}</strong> —
+        {#if isProducing}
+          will pause at {pauseThreshold}
+        {:else}
+          will resume at {resumeThreshold} or fewer
+        {/if}
+      </p>
+    {/if}
   {:else}
     <p class="loading">Loading factory status...</p>
   {/if}
@@ -106,21 +134,44 @@
     margin-bottom: 0.5rem;
   }
 
+  .status-badges {
+    display: flex;
+    gap: 0.5rem;
+  }
+
   .status-indicator {
     padding: 0.25rem 0.75rem;
     border-radius: 4px;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
   }
 
-  .status-indicator.open {
+  .status-indicator.enabled {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .status-indicator.disabled {
+    background: #6b7280;
+    color: white;
+  }
+
+  .production-indicator {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+
+  .production-indicator.producing {
     background: #10b981;
     color: white;
   }
 
-  .status-indicator.closed {
-    background: #6b7280;
+  .production-indicator.paused {
+    background: #f59e0b;
     color: white;
   }
 
@@ -161,6 +212,13 @@
     margin: 0;
     font-size: 0.8rem;
     opacity: 0.8;
+  }
+
+  .factory-note {
+    margin: 0.5rem 0 0 0;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    font-style: italic;
   }
 
   .loading {

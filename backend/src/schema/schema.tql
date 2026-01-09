@@ -10,6 +10,7 @@ attribute location, value string;
 attribute balance, value double;
 attribute margin-percent, value double;
 attribute outlet-open, value boolean;
+attribute production-enabled, value boolean;
 
 attribute donut-type-id, value string;
 attribute donut-name, value string;
@@ -47,6 +48,7 @@ entity outlet,
     owns balance @card(1..1),
     owns margin-percent @card(1..1),
     owns outlet-open @card(1..1),
+    owns production-enabled @card(0..1),
     owns created-at @card(1..1),
     plays listing-creation:creator,
     plays order-placement:placer,

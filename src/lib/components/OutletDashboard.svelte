@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { outlets, donutTypes, selectedOutlet, selectedDonutType } from '../stores';
+  import { outlets } from '../stores';
   import type { Outlet } from '../types';
 
   // Inventory per outlet: outletId -> { donutTypeId -> quantity }
-  // Using a reactive key to force re-renders when inventory changes
   let inventories: Record<string, Record<string, number>> = {};
   let inventoryKey = 0;
 
@@ -22,10 +21,8 @@
       if (response.ok) {
         const data = await response.json();
         inventories[outletId] = data;
-        inventories = {...inventories}; // trigger reactivity with new object
-        inventoryKey++; // force re-render
-      } else {
-        console.error(`Failed to fetch inventory for ${outletId}: ${response.status}`);
+        inventories = {...inventories};
+        inventoryKey++;
       }
     } catch (error) {
       console.error(`Error fetching inventory for ${outletId}:`, error);
@@ -54,30 +51,23 @@
   }
 
   onMount(() => {
-    // Refresh inventory every 2 seconds
     const interval = setInterval(fetchAllInventories, 2000);
     return () => clearInterval(interval);
   });
 
-  // Re-fetch inventory whenever outlets change (ensures we have outlet IDs)
   $: if ($outlets.length > 0) {
     fetchAllInventories();
   }
 
-  async function toggleOutlet(outlet: Outlet, event: MouseEvent) {
-    event.stopPropagation(); // Prevent outlet selection
+  async function toggleOutlet(outlet: Outlet) {
     const newStatus = !outlet.isOpen;
-
     try {
       const response = await fetch(`http://localhost:3000/api/outlets/${outlet.outletId}/toggle`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isOpen: newStatus })
       });
-
       if (!response.ok) throw new Error('Failed to toggle outlet');
-
-      // Update local state
       outlet.isOpen = newStatus;
       outlets.set($outlets);
     } catch (error) {
@@ -92,10 +82,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isOpen })
       });
-
       if (!response.ok) throw new Error('Failed to toggle all outlets');
-
-      // Update local state
       $outlets.forEach(o => o.isOpen = isOpen);
       outlets.set($outlets);
     } catch (error) {
@@ -104,95 +91,54 @@
   }
 </script>
 
-<div class="selector-container">
-  <!-- Outlet Selector -->
-  <div class="selector-section">
-    <div class="section-header">
-      <h3>Select Outlet</h3>
-      <div class="toggle-all-buttons">
-        <button class="toggle-all-btn open" on:click={() => toggleAll(true)}>Open All</button>
-        <button class="toggle-all-btn close" on:click={() => toggleAll(false)}>Close All</button>
-      </div>
+<div class="dashboard-container">
+  <div class="section-header">
+    <h3>Retail Outlets</h3>
+    <div class="toggle-all-buttons">
+      <button class="toggle-all-btn open" on:click={() => toggleAll(true)}>Open All</button>
+      <button class="toggle-all-btn close" on:click={() => toggleAll(false)}>Close All</button>
     </div>
-    {#if $outlets.length > 0}
-      <div class="selector-grid">
-        {#each $outlets as outlet (outlet.outletId)}
-          <button
-            class="selector-card"
-            class:active={$selectedOutlet?.outletId === outlet.outletId}
-            class:closed={!outlet.isOpen}
-            on:click={() => selectedOutlet.set(outlet)}
-          >
-            <div class="card-header">
-              <strong>{outlet.outletName}</strong>
-              <span class="badge">${formatBalance(outlet.balance)}</span>
-            </div>
-            <div class="card-body">
-              <span class="location">{outlet.location}</span>
-              <span class="margin-info">Retail Margin: {formatMargin(outlet.marginPercent)}</span>
-              {#key inventoryKey}
-              <div class="inventory-info">
-                <span class="inventory-label">Inventory ({getTotalInventory(outlet.outletId)} total):</span>
-                <span class="inventory-items">{formatInventory(outlet.outletId)}</span>
-              </div>
-              {/key}
-              <div class="status-controls">
-                <span class="status-indicator" class:open={outlet.isOpen} class:closed={!outlet.isOpen}>
-                  {outlet.isOpen ? '🟢 OPEN' : '🔴 CLOSED'}
-                </span>
-                <div
-                  class="toggle-btn"
-                  role="button"
-                  tabindex="0"
-                  on:click={(e) => toggleOutlet(outlet, e)}
-                  on:keydown={(e) => e.key === 'Enter' && toggleOutlet(outlet, e)}
-                >
-                  {outlet.isOpen ? 'Close' : 'Open'}
-                </div>
-              </div>
-            </div>
-          </button>
-        {/each}
-      </div>
-    {:else}
-      <div class="empty">No outlets available</div>
-    {/if}
   </div>
 
-  <!-- Donut Type Selector -->
-  <div class="selector-section">
-    <h3>Select Donut Type</h3>
-    {#if $donutTypes.length > 0}
-      <div class="selector-grid">
-        {#each $donutTypes as donutType (donutType.donutTypeId)}
-          <button
-            class="selector-card"
-            class:active={$selectedDonutType?.donutTypeId === donutType.donutTypeId}
-            on:click={() => selectedDonutType.set(donutType)}
-          >
-            <div class="card-header">
-              <strong>{donutType.donutName}</strong>
+  {#if $outlets.length > 0}
+    <div class="outlet-grid">
+      {#each $outlets as outlet (outlet.outletId)}
+        <div class="outlet-card" class:closed={!outlet.isOpen}>
+          <div class="card-header">
+            <strong>{outlet.outletName}</strong>
+            <span class="badge">${formatBalance(outlet.balance)}</span>
+          </div>
+          <div class="card-body">
+            <span class="location">{outlet.location}</span>
+            <span class="margin-info">
+              Retail Margin: {formatMargin(outlet.marginPercent)}
+              <span class="info-icon" data-tooltip="The markup percentage added to cost basis when selling to customers. A 25% margin means a $2.00 donut sells for $2.50.">i</span>
+            </span>
+            {#key inventoryKey}
+            <div class="inventory-info">
+              <span class="inventory-label">Inventory ({getTotalInventory(outlet.outletId)} total):</span>
+              <span class="inventory-items">{formatInventory(outlet.outletId)}</span>
             </div>
-            <div class="card-body">
-              <span class="description">{donutType.description}</span>
+            {/key}
+            <div class="status-controls">
+              <span class="status-indicator" class:open={outlet.isOpen} class:closed={!outlet.isOpen}>
+                {outlet.isOpen ? 'OPEN' : 'CLOSED'}
+              </span>
+              <button class="toggle-btn" on:click={() => toggleOutlet(outlet)}>
+                {outlet.isOpen ? 'Close' : 'Open'}
+              </button>
             </div>
-          </button>
-        {/each}
-      </div>
-    {:else}
-      <div class="empty">No donut types available</div>
-    {/if}
-  </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div class="empty">No outlets available</div>
+  {/if}
 </div>
 
 <style>
-  .selector-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .selector-section {
+  .dashboard-container {
     background: white;
     border-radius: 8px;
     padding: 1.5rem;
@@ -244,41 +190,23 @@
     background: #dc2626;
   }
 
-  .selector-grid {
+  .outlet-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
   }
 
-  .selector-card {
+  .outlet-card {
     background: #f9fafb;
     border: 2px solid #e5e7eb;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 1rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: left;
   }
 
-  .selector-card:hover {
-    border-color: #3b82f6;
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-  }
-
-  .selector-card.active {
-    background: #eff6ff;
-    border-color: #3b82f6;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-  }
-
-  .selector-card.closed {
-    opacity: 0.6;
+  .outlet-card.closed {
+    opacity: 0.7;
     background: #fef2f2;
     border-color: #fca5a5;
-  }
-
-  .selector-card.closed:hover {
-    border-color: #ef4444;
   }
 
   .card-header {
@@ -307,8 +235,7 @@
     color: #6b7280;
   }
 
-  .location,
-  .description {
+  .location {
     display: block;
   }
 
@@ -318,6 +245,57 @@
     font-size: 0.8rem;
     color: #7c3aed;
     font-weight: 500;
+  }
+
+  .info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #e5e7eb;
+    border-radius: 50%;
+    cursor: help;
+    vertical-align: middle;
+    position: relative;
+  }
+
+  .info-icon:hover {
+    background: #d1d5db;
+    color: #374151;
+  }
+
+  .info-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: normal;
+    white-space: normal;
+    width: 200px;
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.1s;
+    z-index: 100;
+    pointer-events: none;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .info-icon:hover::after {
+    opacity: 1;
+    visibility: visible;
   }
 
   .inventory-info {

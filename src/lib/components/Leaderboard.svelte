@@ -80,7 +80,10 @@
           <tr>
             <th>Rank</th>
             <th>Outlet</th>
-            <th>Margin</th>
+            <th>
+              Margin
+              <span class="info-icon" data-tooltip="Markup percentage added to cost when selling to customers. Higher margins = more profit per sale but potentially slower sales.">i</span>
+            </th>
             <th>Balance</th>
             <th>Customer Sales</th>
             <th>Exchange Sales</th>
@@ -224,6 +227,57 @@
   .margin {
     font-weight: 500;
     color: #7c3aed;
+  }
+
+  .info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #e5e7eb;
+    border-radius: 50%;
+    cursor: help;
+    vertical-align: middle;
+    position: relative;
+  }
+
+  .info-icon:hover {
+    background: #d1d5db;
+    color: #374151;
+  }
+
+  .info-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: normal;
+    white-space: normal;
+    width: 220px;
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.1s;
+    z-index: 100;
+    pointer-events: none;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .info-icon:hover::after {
+    opacity: 1;
+    visibility: visible;
   }
 
   .balance {

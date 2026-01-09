@@ -1,10 +1,9 @@
 import { writable, derived } from 'svelte/store';
-import type { DonutType, Outlet, OrderBook, Transaction } from './types';
+import type { DonutType, Outlet, OrderBook, Transaction, FactoryStatus } from './types';
 import { api } from './api';
 import { websocket, type ErrorData } from './websocket';
 
-// Selected outlet and donut type
-export const selectedOutlet = writable<Outlet | null>(null);
+// Selected donut type for order book filtering
 export const selectedDonutType = writable<DonutType | null>(null);
 
 // Data stores
@@ -12,7 +11,7 @@ export const outlets = writable<Outlet[]>([]);
 export const donutTypes = writable<DonutType[]>([]);
 export const orderBook = writable<OrderBook | null>(null);
 export const transactions = writable<Transaction[]>([]);
-export const factory = writable<Outlet | null>(null);
+export const factoryStatus = writable<FactoryStatus | null>(null);
 
 // Loading states
 export const loading = writable(false);
@@ -21,6 +20,13 @@ export const error = writable<string | null>(null);
 // Error log (for displaying backend errors)
 export const errorLog = writable<ErrorData[]>([]);
 
+// Special "All Types" option for combined order book view
+export const ALL_TYPES: DonutType = {
+  donutTypeId: 'all',
+  donutName: 'All Types',
+  description: 'View all donut types'
+};
+
 // Initialize stores
 export async function initializeStores() {
   loading.set(true);
@@ -28,23 +34,19 @@ export async function initializeStores() {
 
   try {
     // Load outlets, donut types, and factory
-    const [outletsData, donutTypesData, factoryData] = await Promise.all([
+    const [outletsData, donutTypesData, factoryStatusData] = await Promise.all([
       api.getOutlets(),
       api.getDonutTypes(),
       api.getFactory().catch(() => null) // Factory might not exist yet
     ]);
 
     outlets.set(outletsData);
-    donutTypes.set(donutTypesData);
-    factory.set(factoryData);
+    // Add "All Types" option at the beginning
+    donutTypes.set([ALL_TYPES, ...donutTypesData]);
+    factoryStatus.set(factoryStatusData);
 
-    // Set defaults if available
-    if (outletsData.length > 0) {
-      selectedOutlet.set(outletsData[0]);
-    }
-    if (donutTypesData.length > 0) {
-      selectedDonutType.set(donutTypesData[0]);
-    }
+    // Default to "All Types" view
+    selectedDonutType.set(ALL_TYPES);
 
     // Connect WebSocket for real-time updates
     websocket.connect();
@@ -68,9 +70,11 @@ export async function initializeStores() {
     websocket.on('order_book_updated', (message) => {
       const book = message.data as OrderBook;
       selectedDonutType.subscribe(async (donutType) => {
-        if (donutType && book.donutTypeId === donutType.donutTypeId) {
-          // Re-fetch with current showFilledOrders setting instead of using broadcast data
-          await refreshOrderBook(donutType.donutTypeId);
+        if (donutType) {
+          // Refresh if viewing this specific type, or if viewing "all"
+          if (book.donutTypeId === donutType.donutTypeId || donutType.donutTypeId === 'all') {
+            await refreshOrderBook(donutType.donutTypeId);
+          }
         }
       })();
     });
@@ -118,7 +122,8 @@ export async function refreshOrderBook(donutTypeId: string, includeAll?: boolean
 
 export async function refreshTransactions(donutTypeId?: string) {
   try {
-    const txs = donutTypeId
+    // Fetch all transactions if donutTypeId is not specified or is "all"
+    const txs = (donutTypeId && donutTypeId !== 'all')
       ? await api.getTransactionsByDonutType(donutTypeId, 50)
       : await api.getTransactions(50);
     transactions.set(txs);
@@ -131,16 +136,6 @@ export async function refreshOutlets() {
   try {
     const outletsData = await api.getOutlets();
     outlets.set(outletsData);
-
-    // Update selected outlet if it exists
-    selectedOutlet.subscribe((selected) => {
-      if (selected) {
-        const updated = outletsData.find(o => o.outletId === selected.outletId);
-        if (updated) {
-          selectedOutlet.set(updated);
-        }
-      }
-    })();
   } catch (err) {
     console.error('Failed to refresh outlets:', err);
   }
@@ -148,8 +143,8 @@ export async function refreshOutlets() {
 
 export async function refreshFactory() {
   try {
-    const factoryData = await api.getFactory();
-    factory.set(factoryData);
+    const status = await api.getFactory();
+    factoryStatus.set(status);
   } catch (err) {
     console.error('Failed to refresh factory:', err);
   }
@@ -158,9 +153,7 @@ export async function refreshFactory() {
 export async function toggleFactory(isOpen: boolean) {
   try {
     const result = await api.toggleFactory(isOpen);
-    if (result.factory) {
-      factory.set(result.factory);
-    }
+    factoryStatus.set(result);
   } catch (err) {
     console.error('Failed to toggle factory:', err);
     throw err;

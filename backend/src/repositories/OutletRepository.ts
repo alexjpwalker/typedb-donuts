@@ -24,7 +24,10 @@ export class OutletRepository {
     const now = new Date().toISOString().replace('Z', '');
     const marginPercent = outlet.marginPercent || 25.0; // Default 25% margin
     const isOpen = outlet.isOpen !== undefined ? outlet.isOpen : true; // Default to open
-    const query = `
+    const productionEnabled = outlet.productionEnabled !== undefined ? outlet.productionEnabled : true; // Default to enabled
+
+    // Build query - productionEnabled is optional (only for factory)
+    let query = `
       insert
       $outlet isa outlet,
         has outlet-id "${outlet.outletId}",
@@ -33,13 +36,21 @@ export class OutletRepository {
         has balance ${outlet.balance},
         has margin-percent ${marginPercent},
         has outlet-open ${isOpen},
-        has created-at ${now};
-    `;
+        has created-at ${now}`;
+
+    // Only add production-enabled for factory outlets
+    if (outlet.outletId === 'supplier-factory') {
+      query += `,
+        has production-enabled ${productionEnabled}`;
+    }
+
+    query += `;`;
 
     await this.getHelper().executeWriteQuery(query);
 
     return {
       ...outlet,
+      productionEnabled: outlet.outletId === 'supplier-factory' ? productionEnabled : undefined,
       createdAt: new Date()
     };
   }
@@ -63,6 +74,7 @@ export class OutletRepository {
         balance: doc.balance,
         marginPercent: doc['margin-percent'] || 25.0,
         isOpen: doc['outlet-open'] !== undefined ? doc['outlet-open'] : true,
+        productionEnabled: doc['production-enabled'],
         createdAt: new Date(doc['created-at'])
       };
     }
@@ -87,6 +99,7 @@ export class OutletRepository {
         balance: doc.balance,
         marginPercent: doc['margin-percent'] || 25.0,
         isOpen: doc['outlet-open'] !== undefined ? doc['outlet-open'] : true,
+        productionEnabled: doc['production-enabled'],
         createdAt: new Date(doc['created-at'])
       }));
     }
@@ -133,6 +146,17 @@ export class OutletRepository {
       $outlet isa outlet;
       update
       $outlet has outlet-open ${isOpen};
+    `;
+
+    await this.getHelper().executeWriteQuery(query);
+  }
+
+  async setProductionEnabled(outletId: string, enabled: boolean): Promise<void> {
+    const query = `
+      match
+      $outlet isa outlet, has outlet-id "${outletId}";
+      update
+      $outlet has production-enabled ${enabled};
     `;
 
     await this.getHelper().executeWriteQuery(query);

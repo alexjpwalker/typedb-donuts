@@ -144,6 +144,9 @@ export class PurchasingAgent {
    * Execute purchasing strategies for all configured outlets
    */
   private async executeAllStrategies(): Promise<void> {
+    // Check for new outlets that need configs
+    await this.checkForNewOutlets();
+
     for (const [outletId, config] of this.configs) {
       if (!config.enabled) continue;
 
@@ -152,6 +155,37 @@ export class PurchasingAgent {
       } catch (error) {
         console.error(`Error executing strategies for ${outletId}:`, error);
       }
+    }
+  }
+
+  /**
+   * Check for outlets that don't have purchasing configs yet and add them
+   */
+  private async checkForNewOutlets(): Promise<void> {
+    try {
+      const outlets = await this.exchangeService.getAllOutlets();
+      const donutTypes = await this.exchangeService.getAllDonutTypes();
+
+      for (const outlet of outlets) {
+        // Skip the supplier factory
+        if (outlet.outletId === 'supplier-factory') continue;
+
+        // Skip if already configured
+        if (this.configs.has(outlet.outletId)) continue;
+
+        // Create default strategies for this new outlet
+        const strategies = donutTypes.map(dt => this.createDefaultStrategy(dt.donutTypeId, outlet));
+
+        this.setConfig({
+          outletId: outlet.outletId,
+          strategies,
+          enabled: true
+        });
+
+        console.log(`🆕 Added purchasing config for new outlet: ${outlet.outletName}`);
+      }
+    } catch (error) {
+      console.error('Error checking for new outlets:', error);
     }
   }
 

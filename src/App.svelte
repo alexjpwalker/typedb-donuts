@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initializeStores, loading, error, selectedOutlet, selectedDonutType } from './lib/stores';
-  import OutletSelector from './lib/components/OutletSelector.svelte';
+  import { initializeStores, loading, error } from './lib/stores';
+  import OutletDashboard from './lib/components/OutletDashboard.svelte';
   import OrderBook from './lib/components/OrderBook.svelte';
-  import PlaceOrder from './lib/components/PlaceOrder.svelte';
   import TransactionHistory from './lib/components/TransactionHistory.svelte';
   import Leaderboard from './lib/components/Leaderboard.svelte';
   import FactoryControl from './lib/components/FactoryControl.svelte';
@@ -36,9 +35,9 @@
       <FactoryControl />
     </section>
 
-    <!-- Selection Section -->
-    <section class="selection-section">
-      <OutletSelector />
+    <!-- Outlets Dashboard -->
+    <section class="outlets-section">
+      <OutletDashboard />
     </section>
 
     <!-- Leaderboard Section -->
@@ -46,20 +45,11 @@
       <Leaderboard />
     </section>
 
-    {#if $selectedOutlet && $selectedDonutType}
-      <div class="selected-info">
-        Trading as <strong>{$selectedOutlet.outletName}</strong> for <strong>{$selectedDonutType.donutName}</strong>
-      </div>
-    {/if}
-
-    <!-- Trading Section -->
-    <section class="trading-section">
-      <div class="left-panel">
+    <!-- Market Section -->
+    <section class="market-section">
+      <div class="market-panels">
         <OrderBook />
         <TransactionHistory />
-      </div>
-      <div class="right-panel">
-        <PlaceOrder />
       </div>
     </section>
   {/if}
@@ -153,7 +143,7 @@
     margin-bottom: 1.5rem;
   }
 
-  .selection-section {
+  .outlets-section {
     margin-bottom: 2rem;
   }
 
@@ -161,37 +151,14 @@
     margin-bottom: 2rem;
   }
 
-  .selected-info {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 8px;
-    padding: 1rem;
-    text-align: center;
+  .market-section {
     margin-bottom: 2rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    font-size: 1.125rem;
   }
 
-  .selected-info strong {
-    color: #3b82f6;
-  }
-
-  .trading-section {
+  .market-panels {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .left-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-  }
-
-  .right-panel {
-    position: sticky;
-    top: 2rem;
-    height: fit-content;
   }
 
   footer {
@@ -203,12 +170,8 @@
   }
 
   @media (max-width: 1024px) {
-    .trading-section {
+    .market-panels {
       grid-template-columns: 1fr;
-    }
-
-    .right-panel {
-      position: static;
     }
   }
 

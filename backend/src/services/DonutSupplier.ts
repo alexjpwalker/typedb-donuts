@@ -1,5 +1,6 @@
 import { ExchangeService } from './ExchangeService.js';
 import { OrderSide } from '../models/types.js';
+import { FACTORY_PAUSE_THRESHOLD, FACTORY_RESUME_THRESHOLD } from '../config/constants.js';
 
 /**
  * DonutSupplier acts as a virtual "factory" that periodically supplies
@@ -83,7 +84,8 @@ export class DonutSupplier {
           location: 'Industrial District',
           balance: 1000000, // Unlimited funds essentially
           marginPercent: 0,
-          isOpen: true // Factory starts open and producing
+          isOpen: true // Manual control: factory starts enabled
+          // productionEnabled is managed in-memory by ExchangeService
         });
         console.log('Created supplier outlet: Donut Factory');
       }
@@ -92,19 +94,60 @@ export class DonutSupplier {
     }
   }
 
-  private async isFactoryOpen(): Promise<boolean> {
+  private async getFactoryState(): Promise<{ isOpen: boolean; productionEnabled: boolean }> {
     try {
       const factory = await this.exchangeService.getOutlet(this.SUPPLIER_ID);
-      return factory?.isOpen ?? false;
+      return {
+        isOpen: factory?.isOpen ?? false,
+        productionEnabled: factory?.productionEnabled ?? false
+      };
     } catch {
-      return false;
+      return { isOpen: false, productionEnabled: false };
+    }
+  }
+
+  private async countActiveFactoryOrders(): Promise<number> {
+    try {
+      const donutTypes = await this.exchangeService.getAllDonutTypes();
+      let totalOrders = 0;
+      for (const dt of donutTypes) {
+        const orderBook = await this.exchangeService.getOrderBook(dt.donutTypeId, false);
+        // Count sell orders from the factory
+        totalOrders += orderBook.sellOrders.filter(o => o.outletId === this.SUPPLIER_ID).length;
+      }
+      return totalOrders;
+    } catch {
+      return 0;
+    }
+  }
+
+  private async autoRegulateFactory(): Promise<void> {
+    const { isOpen, productionEnabled } = await this.getFactoryState();
+
+    // Only auto-regulate if factory is manually enabled (isOpen = true)
+    if (!isOpen) {
+      return;
+    }
+
+    const activeOrders = await this.countActiveFactoryOrders();
+
+    if (productionEnabled && activeOrders >= FACTORY_PAUSE_THRESHOLD) {
+      console.log(`🏭 Factory auto-pausing production: ${activeOrders} active orders (threshold: ${FACTORY_PAUSE_THRESHOLD})`);
+      await this.exchangeService.setFactoryProductionEnabled(false);
+    } else if (!productionEnabled && activeOrders <= FACTORY_RESUME_THRESHOLD) {
+      console.log(`🏭 Factory auto-resuming production: ${activeOrders} active orders (threshold: ${FACTORY_RESUME_THRESHOLD})`);
+      await this.exchangeService.setFactoryProductionEnabled(true);
     }
   }
 
   private async supplyDonuts(): Promise<void> {
     try {
-      // Check if factory is open before producing
-      if (!await this.isFactoryOpen()) {
+      // Auto-regulate factory based on order count
+      await this.autoRegulateFactory();
+
+      // Check if factory is enabled AND production is enabled
+      const { isOpen, productionEnabled } = await this.getFactoryState();
+      if (!isOpen || !productionEnabled) {
         return;
       }
 

@@ -6,6 +6,7 @@ import { InventoryRepository } from '../repositories/InventoryRepository.js';
 import { CustomerSaleRepository } from '../repositories/CustomerSaleRepository.js';
 import { MatchingEngine } from '../engine/MatchingEngine.js';
 import { CreateOrderRequest, Order, OrderBook, Transaction, Outlet, DonutType, OutletStats, CustomerSale } from '../models/types.js';
+import { OUTLET_STARTING_BALANCE, FACTORY_PAUSE_THRESHOLD, FACTORY_RESUME_THRESHOLD } from '../config/constants.js';
 
 type OrderBookUpdatedCallback = (orderBook: OrderBook) => void;
 
@@ -225,6 +226,28 @@ export class ExchangeService {
     return await this.orderRepo.getOrderBook(donutTypeId, includeAll);
   }
 
+  async getAllOrderBooks(includeAll: boolean = false): Promise<OrderBook> {
+    const donutTypes = await this.donutTypeRepo.findAll();
+    const allBuyOrders: OrderBook['buyOrders'] = [];
+    const allSellOrders: OrderBook['sellOrders'] = [];
+
+    for (const dt of donutTypes) {
+      const orderBook = await this.orderRepo.getOrderBook(dt.donutTypeId, includeAll);
+      allBuyOrders.push(...orderBook.buyOrders);
+      allSellOrders.push(...orderBook.sellOrders);
+    }
+
+    // Sort by time descending (newest first)
+    allBuyOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    allSellOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return {
+      donutTypeId: 'all',
+      buyOrders: allBuyOrders,
+      sellOrders: allSellOrders
+    };
+  }
+
   // ==========================================
   // Transaction History
   // ==========================================
@@ -263,8 +286,41 @@ export class ExchangeService {
     return await this.outletRepo.findById('supplier-factory');
   }
 
+  async getFactoryStatus(): Promise<{
+    factory: Outlet;
+    activeOrders: number;
+    pauseThreshold: number;
+    resumeThreshold: number;
+  } | null> {
+    const factory = await this.outletRepo.findById('supplier-factory');
+    if (!factory) return null;
+
+    // Count active factory sell orders across all donut types
+    const donutTypes = await this.donutTypeRepo.findAll();
+    let activeOrders = 0;
+    for (const dt of donutTypes) {
+      const orderBook = await this.orderRepo.getOrderBook(dt.donutTypeId, false);
+      activeOrders += orderBook.sellOrders.filter(o => o.outletId === 'supplier-factory').length;
+    }
+
+    return {
+      factory,
+      activeOrders,
+      pauseThreshold: FACTORY_PAUSE_THRESHOLD,
+      resumeThreshold: FACTORY_RESUME_THRESHOLD
+    };
+  }
+
   async toggleFactoryOpen(isOpen: boolean): Promise<void> {
     await this.outletRepo.toggleOpen('supplier-factory', isOpen);
+    // When manually enabling factory, also enable production
+    if (isOpen) {
+      await this.outletRepo.setProductionEnabled('supplier-factory', true);
+    }
+  }
+
+  async setFactoryProductionEnabled(enabled: boolean): Promise<void> {
+    await this.outletRepo.setProductionEnabled('supplier-factory', enabled);
   }
 
   // ==========================================
@@ -366,7 +422,7 @@ export class ExchangeService {
     }
 
     const stats = this.getOrCreateStats(outletId);
-    const netProfit = outlet.balance - 10000; // Starting balance was 10000
+    const netProfit = outlet.balance - OUTLET_STARTING_BALANCE;
 
     return {
       outletId: outlet.outletId,
@@ -389,7 +445,7 @@ export class ExchangeService {
 
     const leaderboard = retailOutlets.map(outlet => {
       const stats = this.getOrCreateStats(outlet.outletId);
-      const netProfit = outlet.balance - 10000; // Starting balance was 10000
+      const netProfit = outlet.balance - OUTLET_STARTING_BALANCE;
       return {
         outletId: outlet.outletId,
         outletName: outlet.outletName,

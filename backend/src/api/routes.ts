@@ -204,12 +204,12 @@ export function createRoutes(exchangeService: ExchangeService): Router {
 
   router.get('/factory', async (_req: Request, res: Response) => {
     try {
-      const factory = await exchangeService.getFactory();
-      if (!factory) {
+      const status = await exchangeService.getFactoryStatus();
+      if (!status) {
         res.status(404).json({ error: 'Factory not found' });
         return;
       }
-      res.json(factory);
+      res.json(status);
     } catch (error) {
       console.error('Error fetching factory:', error);
       res.status(500).json({ error: 'Failed to fetch factory' });
@@ -226,8 +226,8 @@ export function createRoutes(exchangeService: ExchangeService): Router {
       }
 
       await exchangeService.toggleFactoryOpen(isOpen);
-      const factory = await exchangeService.getFactory();
-      res.json({ success: true, factory });
+      const status = await exchangeService.getFactoryStatus();
+      res.json({ success: true, ...status });
     } catch (error) {
       console.error('Error toggling factory:', error);
       res.status(500).json({ error: 'Failed to toggle factory status' });
@@ -287,7 +287,13 @@ export function createRoutes(exchangeService: ExchangeService): Router {
   router.get('/order-book/:donutTypeId', async (req: Request, res: Response) => {
     try {
       const includeAll = req.query.includeAll === 'true';
-      const orderBook = await exchangeService.getOrderBook(req.params.donutTypeId, includeAll);
+      const donutTypeId = req.params.donutTypeId;
+
+      // Handle "all" to get combined order book across all donut types
+      const orderBook = donutTypeId === 'all'
+        ? await exchangeService.getAllOrderBooks(includeAll)
+        : await exchangeService.getOrderBook(donutTypeId, includeAll);
+
       res.json(orderBook);
     } catch (error) {
       console.error('Error fetching order book:', error);

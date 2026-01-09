@@ -20,7 +20,15 @@ export interface Outlet {
   balance?: number; // Optional since some old outlets may not have it
   marginPercent?: number; // Retail markup percentage
   isOpen?: boolean; // Whether outlet is open for business
+  productionEnabled?: boolean; // For factory only: whether auto-regulation allows production
   createdAt: string;
+}
+
+export interface FactoryStatus {
+  factory: Outlet;
+  activeOrders: number;
+  pauseThreshold: number;
+  resumeThreshold: number;
 }
 
 export interface DonutType {
@@ -65,6 +73,7 @@ export interface Transaction {
 export interface OrderBookEntry {
   orderId: string;
   outletId: string;
+  donutTypeId: string;
   quantity: number;
   pricePerUnit: number;
   status: OrderStatus;

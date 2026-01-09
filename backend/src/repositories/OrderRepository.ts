@@ -165,6 +165,7 @@ export class OrderRepository {
           sellOrders.push({
             orderId: doc.orderId,
             outletId: doc.outletId,
+            donutTypeId,
             quantity: doc.quantity,
             pricePerUnit: doc.pricePerUnit,
             status: parseStatus(doc.status),
@@ -178,6 +179,7 @@ export class OrderRepository {
           buyOrders.push({
             orderId: doc.orderId,
             outletId: doc.outletId,
+            donutTypeId,
             quantity: doc.quantity,
             pricePerUnit: doc.pricePerUnit,
             status: parseStatus(doc.status),
@@ -198,9 +200,10 @@ export class OrderRepository {
         ? buyOrders
         : buyOrders.filter(o => isMatchable(o.status));
 
-      // Sort by time descending (newest first) for display
-      filteredSellOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      filteredBuyOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // Sort for matching: sell orders by price ascending (lowest first), buy orders by price descending (highest first)
+      // Secondary sort by time ascending (oldest first) for FIFO within same price
+      filteredSellOrders.sort((a, b) => a.pricePerUnit - b.pricePerUnit || a.createdAt.getTime() - b.createdAt.getTime());
+      filteredBuyOrders.sort((a, b) => b.pricePerUnit - a.pricePerUnit || a.createdAt.getTime() - b.createdAt.getTime());
 
       return { donutTypeId, buyOrders: filteredBuyOrders, sellOrders: filteredSellOrders };
     } catch (error) {

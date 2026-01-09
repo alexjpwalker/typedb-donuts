@@ -26,6 +26,7 @@ export interface Outlet {
   balance: number;
   marginPercent: number; // Retail markup percentage (e.g., 30 = 30%)
   isOpen: boolean; // Whether outlet is open for business
+  productionEnabled?: boolean; // For factory only: whether auto-regulation allows production
   createdAt: Date;
 }
 
@@ -101,6 +102,7 @@ export interface Transaction {
 export interface OrderBookEntry {
   orderId: string;
   outletId: string;
+  donutTypeId: string;
   quantity: number;
   pricePerUnit: number;
   status: OrderStatus;

@@ -4,7 +4,8 @@ import type {
   Order,
   OrderBook,
   Transaction,
-  CreateOrderRequest
+  CreateOrderRequest,
+  FactoryStatus
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -117,11 +118,11 @@ class ApiClient {
   }
 
   // Factory
-  async getFactory(): Promise<Outlet> {
+  async getFactory(): Promise<FactoryStatus> {
     return this.request('/factory');
   }
 
-  async toggleFactory(isOpen: boolean): Promise<{ success: boolean; factory: Outlet }> {
+  async toggleFactory(isOpen: boolean): Promise<FactoryStatus & { success: boolean }> {
     return this.request('/factory/toggle', {
       method: 'PATCH',
       body: JSON.stringify({ isOpen }),

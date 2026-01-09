@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { orderBook, bestBid, bestAsk, spread, showFilledOrders, refreshOrderBook, selectedDonutType } from '../stores';
+  import { orderBook, bestBid, bestAsk, spread, showFilledOrders, refreshOrderBook, selectedDonutType, donutTypes } from '../stores';
   import { OrderStatus } from '../types';
 
   function formatPrice(price: number): string {
@@ -15,6 +15,14 @@
     return status === OrderStatus.ACTIVE;
   }
 
+  function handleTypeChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const type = $donutTypes.find(t => t.donutTypeId === select.value);
+    if (type) {
+      selectedDonutType.set(type);
+    }
+  }
+
   // Re-fetch when toggle changes
   $: if ($selectedDonutType && $showFilledOrders !== undefined) {
     refreshOrderBook($selectedDonutType.donutTypeId, $showFilledOrders);
@@ -23,7 +31,14 @@
 
 <div class="order-book">
   <div class="header">
-    <h2>Order Book {#if $selectedDonutType}<span class="donut-type">({$selectedDonutType.donutName})</span>{/if}</h2>
+    <div class="header-left">
+      <h2>Order Book</h2>
+      <select class="type-select" value={$selectedDonutType?.donutTypeId} on:change={handleTypeChange}>
+        {#each $donutTypes as type (type.donutTypeId)}
+          <option value={type.donutTypeId}>{type.donutName}</option>
+        {/each}
+      </select>
+    </div>
     <div class="header-right">
       <label class="toggle-label">
         <input type="checkbox" bind:checked={$showFilledOrders} />
@@ -116,6 +131,27 @@
     margin-bottom: 1rem;
   }
 
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .type-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+    cursor: pointer;
+  }
+
+  .type-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+
   .header-right {
     display: flex;
     align-items: center;
@@ -138,12 +174,6 @@
   h2 {
     margin: 0;
     font-size: 1.5rem;
-  }
-
-  .donut-type {
-    font-size: 1rem;
-    font-weight: 400;
-    color: #6b7280;
   }
 
   .spread {
