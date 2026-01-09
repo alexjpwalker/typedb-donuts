@@ -14,8 +14,8 @@
 
 <main>
   <header>
-    <h1>🍩 Donut Exchange</h1>
-    <p class="subtitle">Global marketplace for donut outlets</p>
+    <h1>🍩 TypeDB Donuts</h1>
+    <p class="subtitle">Donuts on the High Street backed by a donut stock exchange</p>
   </header>
 
   {#if $loading}

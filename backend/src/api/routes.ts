@@ -132,6 +132,22 @@ export function createRoutes(exchangeService: ExchangeService): Router {
     }
   });
 
+  router.get('/outlets/:outletId/inventory', async (req: Request, res: Response) => {
+    try {
+      const { outletId } = req.params;
+      const inventoryMap = exchangeService.getAllOutletInventory(outletId);
+      // Convert Map to object for JSON serialization
+      const inventory: Record<string, number> = {};
+      inventoryMap.forEach((qty, donutTypeId) => {
+        inventory[donutTypeId] = qty;
+      });
+      res.json(inventory);
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+      res.status(500).json({ error: 'Failed to fetch inventory' });
+    }
+  });
+
   router.get('/leaderboard', async (_req: Request, res: Response) => {
     try {
       const leaderboard = await exchangeService.getLeaderboard();

@@ -161,9 +161,13 @@ export class CustomerSimulator {
     for (const donutTypeId of customer.shoppingList) {
       let purchased = false;
 
-      // Visit outlets in random order until we find one that's open
+      // Visit outlets in random order until we find one with stock
       for (const outlet of shuffledOutlets) {
         if (!outlet.isOpen) continue;
+
+        // Check if outlet has inventory
+        const stock = this.exchangeService.getOutletInventory(outlet.outletId, donutTypeId);
+        if (stock === 0) continue; // No stock, try next outlet
 
         customer.visitedOutlets.push(outlet.outletId);
 
@@ -171,11 +175,11 @@ export class CustomerSimulator {
           eventType: 'customer_visiting',
           customer,
           outlet,
-          message: `Customer ${customer.customerId} visiting ${outlet.outletName}`
+          message: `Customer ${customer.customerId} visiting ${outlet.outletName} (${stock} ${donutTypeId} in stock)`
         });
 
-        // Buy from this outlet (first one found)
-        const quantity = Math.floor(Math.random() * 3) + 1; // 1-3 donuts
+        // Buy from this outlet (first one found with stock)
+        const quantity = Math.min(Math.floor(Math.random() * 3) + 1, stock); // 1-3 donuts, limited by stock
         try {
           const sale = await this.exchangeService.sellToCustomer(
             outlet.outletId,
@@ -202,40 +206,45 @@ export class CustomerSimulator {
       }
 
       if (!purchased) {
-        // Couldn't find anywhere to buy this item
+        // Couldn't find anywhere to buy this item - no outlets have stock
       }
     }
   }
 
   private async processPriceHunterCustomer(customer: SimulatedCustomer, outlets: Outlet[]): Promise<void> {
-    // Price hunter checks all outlets first, then buys from cheapest
+    // Price hunter checks all outlets first, then buys from cheapest with stock
     const openOutlets = outlets.filter(o => o.isOpen);
 
     for (const donutTypeId of customer.shoppingList) {
-      // Find cheapest outlet
+      // Find cheapest outlet that has stock
       let cheapestOutlet: Outlet | null = null;
       let cheapestPrice = Infinity;
+      let availableStock = 0;
 
       for (const outlet of openOutlets) {
+        const stock = this.exchangeService.getOutletInventory(outlet.outletId, donutTypeId);
+        if (stock === 0) continue; // No stock, skip
+
         customer.visitedOutlets.push(outlet.outletId);
 
         this.emitEvent({
           eventType: 'customer_visiting',
           customer,
           outlet,
-          message: `Customer ${customer.customerId} (price hunter) checking prices at ${outlet.outletName}`
+          message: `Customer ${customer.customerId} (price hunter) checking ${outlet.outletName} (${stock} in stock)`
         });
 
         const price = this.calculatePrice(outlet);
         if (price < cheapestPrice) {
           cheapestPrice = price;
           cheapestOutlet = outlet;
+          availableStock = stock;
         }
       }
 
-      // Buy from cheapest outlet
+      // Buy from cheapest outlet that has stock
       if (cheapestOutlet) {
-        const quantity = Math.floor(Math.random() * 3) + 1; // 1-3 donuts
+        const quantity = Math.min(Math.floor(Math.random() * 3) + 1, availableStock); // 1-3 donuts, limited by stock
         try {
           const sale = await this.exchangeService.sellToCustomer(
             cheapestOutlet.outletId,

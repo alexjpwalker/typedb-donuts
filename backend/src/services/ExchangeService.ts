@@ -13,6 +13,9 @@ interface OutletSalesStats {
   exchangeSalesCount: number;
 }
 
+// Inventory: outletId -> donutTypeId -> quantity
+type InventoryMap = Map<string, Map<string, number>>;
+
 export class ExchangeService {
   private orderRepo: OrderRepository;
   private transactionRepo: TransactionRepository;
@@ -22,6 +25,9 @@ export class ExchangeService {
 
   // Track sales stats per outlet (in-memory for now)
   private salesStats: Map<string, OutletSalesStats> = new Map();
+
+  // Track inventory per outlet per donut type
+  private inventory: InventoryMap = new Map();
 
   constructor() {
     this.orderRepo = new OrderRepository();
@@ -43,13 +49,40 @@ export class ExchangeService {
     return this.salesStats.get(outletId)!;
   }
 
+  private getInventory(outletId: string, donutTypeId: string): number {
+    const outletInventory = this.inventory.get(outletId);
+    if (!outletInventory) return 0;
+    return outletInventory.get(donutTypeId) || 0;
+  }
+
+  private addInventory(outletId: string, donutTypeId: string, quantity: number): void {
+    if (!this.inventory.has(outletId)) {
+      this.inventory.set(outletId, new Map());
+    }
+    const outletInventory = this.inventory.get(outletId)!;
+    const current = outletInventory.get(donutTypeId) || 0;
+    outletInventory.set(donutTypeId, current + quantity);
+  }
+
+  private removeInventory(outletId: string, donutTypeId: string, quantity: number): boolean {
+    const current = this.getInventory(outletId, donutTypeId);
+    if (current < quantity) return false;
+    const outletInventory = this.inventory.get(outletId)!;
+    outletInventory.set(donutTypeId, current - quantity);
+    return true;
+  }
+
   async start(): Promise<void> {
-    // Subscribe to trade events for stats tracking
+    // Subscribe to trade events for stats and inventory tracking
     this.matchingEngine.onTradeExecuted((event) => {
       // Track exchange sale for the seller
       const sellerStats = this.getOrCreateStats(event.sellerOutletId);
       sellerStats.exchangeSalesRevenue += event.totalAmount;
       sellerStats.exchangeSalesCount += 1;
+
+      // Add inventory to the buyer
+      this.addInventory(event.buyerOutletId, event.donutTypeId, event.quantity);
+      console.log(`📦 Inventory: ${event.buyerOutletId} received ${event.quantity} ${event.donutTypeId} donuts`);
     });
 
     await this.matchingEngine.start();
@@ -158,11 +191,28 @@ export class ExchangeService {
     await this.outletRepo.toggleAllOpen(isOpen);
   }
 
+  getOutletInventory(outletId: string, donutTypeId: string): number {
+    return this.getInventory(outletId, donutTypeId);
+  }
+
+  getAllOutletInventory(outletId: string): Map<string, number> {
+    return this.inventory.get(outletId) || new Map();
+  }
+
   async sellToCustomer(outletId: string, donutTypeId: string, quantity: number): Promise<CustomerSale> {
     const outlet = await this.outletRepo.findById(outletId);
     if (!outlet) {
       throw new Error('Outlet not found');
     }
+
+    // Check inventory
+    const available = this.getInventory(outletId, donutTypeId);
+    if (available < quantity) {
+      throw new Error(`Insufficient inventory: ${available} ${donutTypeId} available, ${quantity} requested`);
+    }
+
+    // Remove from inventory
+    this.removeInventory(outletId, donutTypeId, quantity);
 
     // Simplified: assume outlet bought donuts at $2/unit on the exchange
     // In reality, we'd track actual inventory cost basis
@@ -178,7 +228,7 @@ export class ExchangeService {
     stats.customerSalesRevenue += revenue;
     stats.customerSalesCount += 1;
 
-    console.log(`🛒 Customer Sale: ${outlet.outletName} sold ${quantity} ${donutTypeId} donuts`);
+    console.log(`🛒 Customer Sale: ${outlet.outletName} sold ${quantity} ${donutTypeId} donuts (${available - quantity} remaining)`);
     console.log(`   Cost: $${costBasis.toFixed(2)}, Revenue: $${revenue.toFixed(2)}, Profit: $${profit.toFixed(2)} (${outlet.marginPercent}% margin)`);
 
     // Return sale record (simplified - not persisting to DB for now)

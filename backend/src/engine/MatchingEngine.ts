@@ -6,6 +6,7 @@ import { Order, OrderSide, OrderStatus, TradeMatch } from '../models/types.js';
 export interface TradeExecutedEvent {
   buyerOutletId: string;
   sellerOutletId: string;
+  donutTypeId: string;
   quantity: number;
   price: number;
   totalAmount: number;
@@ -196,6 +197,7 @@ export class MatchingEngine {
       const event: TradeExecutedEvent = {
         buyerOutletId: buyOrder.outletId,
         sellerOutletId: sellOrder.outletId,
+        donutTypeId: buyOrder.donutTypeId,
         quantity,
         price,
         totalAmount

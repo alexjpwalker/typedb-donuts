@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { outlets, donutTypes, selectedOutlet, selectedDonutType } from '../stores';
   import type { Outlet } from '../types';
+
+  // Inventory per outlet: outletId -> { donutTypeId -> quantity }
+  let inventories: Record<string, Record<string, number>> = {};
 
   function formatBalance(balance: number | undefined): string {
     return balance !== undefined ? balance.toFixed(2) : '0.00';
@@ -9,6 +13,46 @@
   function formatMargin(margin: number | undefined): string {
     return margin !== undefined ? `${margin}%` : 'N/A';
   }
+
+  async function fetchInventory(outletId: string) {
+    try {
+      const response = await fetch(`http://localhost:3000/api/outlets/${outletId}/inventory`);
+      if (response.ok) {
+        inventories[outletId] = await response.json();
+        inventories = inventories; // trigger reactivity
+      }
+    } catch (error) {
+      console.error(`Error fetching inventory for ${outletId}:`, error);
+    }
+  }
+
+  async function fetchAllInventories() {
+    for (const outlet of $outlets) {
+      await fetchInventory(outlet.outletId);
+    }
+  }
+
+  function formatInventory(outletId: string): string {
+    const inv = inventories[outletId];
+    if (!inv) return 'No inventory';
+    const items = Object.entries(inv)
+      .filter(([_, qty]) => qty > 0)
+      .map(([type, qty]) => `${type}: ${qty}`);
+    return items.length > 0 ? items.join(', ') : 'No inventory';
+  }
+
+  function getTotalInventory(outletId: string): number {
+    const inv = inventories[outletId];
+    if (!inv) return 0;
+    return Object.values(inv).reduce((sum, qty) => sum + qty, 0);
+  }
+
+  onMount(() => {
+    fetchAllInventories();
+    // Refresh inventory every 2 seconds
+    const interval = setInterval(fetchAllInventories, 2000);
+    return () => clearInterval(interval);
+  });
 
   async function toggleOutlet(outlet: Outlet, event: MouseEvent) {
     event.stopPropagation(); // Prevent outlet selection
@@ -76,6 +120,10 @@
             <div class="card-body">
               <span class="location">{outlet.location}</span>
               <span class="margin-info">Retail Margin: {formatMargin(outlet.marginPercent)}</span>
+              <div class="inventory-info">
+                <span class="inventory-label">Inventory ({getTotalInventory(outlet.outletId)} total):</span>
+                <span class="inventory-items">{formatInventory(outlet.outletId)}</span>
+              </div>
               <div class="status-controls">
                 <span class="status-indicator" class:open={outlet.isOpen} class:closed={!outlet.isOpen}>
                   {outlet.isOpen ? '🟢 OPEN' : '🔴 CLOSED'}
@@ -258,6 +306,29 @@
     font-size: 0.8rem;
     color: #7c3aed;
     font-weight: 500;
+  }
+
+  .inventory-info {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: #f0fdf4;
+    border-radius: 4px;
+    border: 1px solid #bbf7d0;
+  }
+
+  .inventory-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #166534;
+    margin-bottom: 0.25rem;
+  }
+
+  .inventory-items {
+    display: block;
+    font-size: 0.7rem;
+    color: #15803d;
   }
 
   .status-controls {
