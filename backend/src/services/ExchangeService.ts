@@ -5,12 +5,23 @@ import { DonutTypeRepository } from '../repositories/DonutTypeRepository.js';
 import { MatchingEngine } from '../engine/MatchingEngine.js';
 import { CreateOrderRequest, Order, OrderBook, Transaction, Outlet, DonutType, OutletStats, CustomerSale } from '../models/types.js';
 
+// In-memory tracking for sales statistics
+interface OutletSalesStats {
+  customerSalesRevenue: number;
+  customerSalesCount: number;
+  exchangeSalesRevenue: number;
+  exchangeSalesCount: number;
+}
+
 export class ExchangeService {
   private orderRepo: OrderRepository;
   private transactionRepo: TransactionRepository;
   private outletRepo: OutletRepository;
   private donutTypeRepo: DonutTypeRepository;
   private matchingEngine: MatchingEngine;
+
+  // Track sales stats per outlet (in-memory for now)
+  private salesStats: Map<string, OutletSalesStats> = new Map();
 
   constructor() {
     this.orderRepo = new OrderRepository();
@@ -20,7 +31,27 @@ export class ExchangeService {
     this.matchingEngine = new MatchingEngine();
   }
 
+  private getOrCreateStats(outletId: string): OutletSalesStats {
+    if (!this.salesStats.has(outletId)) {
+      this.salesStats.set(outletId, {
+        customerSalesRevenue: 0,
+        customerSalesCount: 0,
+        exchangeSalesRevenue: 0,
+        exchangeSalesCount: 0
+      });
+    }
+    return this.salesStats.get(outletId)!;
+  }
+
   async start(): Promise<void> {
+    // Subscribe to trade events for stats tracking
+    this.matchingEngine.onTradeExecuted((event) => {
+      // Track exchange sale for the seller
+      const sellerStats = this.getOrCreateStats(event.sellerOutletId);
+      sellerStats.exchangeSalesRevenue += event.totalAmount;
+      sellerStats.exchangeSalesCount += 1;
+    });
+
     await this.matchingEngine.start();
   }
 
@@ -142,6 +173,11 @@ export class ExchangeService {
     // Update outlet balance (they receive cash from customer)
     await this.outletRepo.updateBalance(outletId, outlet.balance + revenue);
 
+    // Track customer sales stats
+    const stats = this.getOrCreateStats(outletId);
+    stats.customerSalesRevenue += revenue;
+    stats.customerSalesCount += 1;
+
     console.log(`🛒 Customer Sale: ${outlet.outletName} sold ${quantity} ${donutTypeId} donuts`);
     console.log(`   Cost: $${costBasis.toFixed(2)}, Revenue: $${revenue.toFixed(2)}, Profit: $${profit.toFixed(2)} (${outlet.marginPercent}% margin)`);
 
@@ -164,17 +200,18 @@ export class ExchangeService {
       throw new Error('Outlet not found');
     }
 
-    // Simplified stats - in reality we'd query customer-sale-record entities
-    // For now, calculate based on balance changes
-    const profitEstimate = Math.max(0, outlet.balance - 10000);
+    const stats = this.getOrCreateStats(outletId);
+    const netProfit = outlet.balance - 10000; // Starting balance was 10000
 
     return {
       outletId: outlet.outletId,
       outletName: outlet.outletName,
-      totalRevenue: outlet.balance,
-      totalCosts: 10000,
-      netProfit: profitEstimate,
-      customerSalesCount: 0, // TODO: Track actual sales
+      balance: outlet.balance,
+      customerSalesRevenue: stats.customerSalesRevenue,
+      customerSalesCount: stats.customerSalesCount,
+      exchangeSalesRevenue: stats.exchangeSalesRevenue,
+      exchangeSalesCount: stats.exchangeSalesCount,
+      netProfit,
       averageMargin: outlet.marginPercent
     };
   }
@@ -182,20 +219,23 @@ export class ExchangeService {
   async getLeaderboard(): Promise<OutletStats[]> {
     const outlets = await this.outletRepo.findAll();
 
-    const stats = outlets.map(outlet => {
-      const profitEstimate = outlet.balance - 10000;
+    const leaderboard = outlets.map(outlet => {
+      const stats = this.getOrCreateStats(outlet.outletId);
+      const netProfit = outlet.balance - 10000; // Starting balance was 10000
       return {
         outletId: outlet.outletId,
         outletName: outlet.outletName,
-        totalRevenue: outlet.balance,
-        totalCosts: 10000,
-        netProfit: profitEstimate,
-        customerSalesCount: 0,
+        balance: outlet.balance,
+        customerSalesRevenue: stats.customerSalesRevenue,
+        customerSalesCount: stats.customerSalesCount,
+        exchangeSalesRevenue: stats.exchangeSalesRevenue,
+        exchangeSalesCount: stats.exchangeSalesCount,
+        netProfit,
         averageMargin: outlet.marginPercent
       };
     });
 
     // Sort by profit descending
-    return stats.sort((a, b) => b.netProfit - a.netProfit);
+    return leaderboard.sort((a, b) => b.netProfit - a.netProfit);
   }
 }

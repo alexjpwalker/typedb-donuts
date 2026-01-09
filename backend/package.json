@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "stop": "lsof -ti:3000 | xargs kill -9 2>/dev/null || echo 'No server running on port 3000'",
     "build": "tsc",
     "start": "node dist/server.js",
     "setup-schema": "tsx src/schema/setup.ts"

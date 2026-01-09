@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer, Server as HTTPServer } from 'http';
 import { TypeDBConnection } from './config/typedb.js';
 import { ExchangeService } from './services/ExchangeService.js';
+import { CustomerSimulator } from './services/CustomerSimulator.js';
 import { createRoutes } from './api/routes.js';
 import { WebSocketManager } from './api/websocket.js';
 
@@ -13,6 +14,7 @@ class DonutExchangeServer {
   private server: HTTPServer;
   private connection: TypeDBConnection;
   private exchangeService: ExchangeService;
+  private customerSimulator: CustomerSimulator;
   private wsManager: WebSocketManager | null = null;
 
   constructor() {
@@ -20,6 +22,7 @@ class DonutExchangeServer {
     this.server = createServer(this.app);
     this.connection = TypeDBConnection.getInstance();
     this.exchangeService = new ExchangeService();
+    this.customerSimulator = new CustomerSimulator(this.exchangeService);
 
     this.setupMiddleware();
     this.setupRoutes();
@@ -80,6 +83,20 @@ class DonutExchangeServer {
       console.log('Starting WebSocket server...');
       this.wsManager = new WebSocketManager(this.server);
 
+      // Connect customer simulator to WebSocket for broadcasting events
+      this.customerSimulator.onCustomerEvent((event) => {
+        // Only broadcast purchase events to reduce noise (arrivals/visits are too frequent)
+        if (event.eventType === 'customer_purchased') {
+          this.wsManager?.notifyCustomerEvent(event);
+        }
+        // Log all events to console
+        console.log(`[Customer] ${event.message}`);
+      });
+
+      // Start customer simulator
+      console.log('Starting customer simulator...');
+      await this.customerSimulator.start();
+
       // Start HTTP server
       this.server.listen(PORT, () => {
         console.log('');
@@ -89,6 +106,7 @@ class DonutExchangeServer {
         console.log(`📡  HTTP API: http://localhost:${PORT}`);
         console.log(`🔌  WebSocket: ws://localhost:${PORT}/ws`);
         console.log(`📊  Health: http://localhost:${PORT}/api/health`);
+        console.log(`👥  Customer Simulator: ACTIVE (1-10 customers/sec)`);
         console.log('='.repeat(60));
         console.log('');
       });
@@ -107,6 +125,9 @@ class DonutExchangeServer {
     console.log(`\n${signal} received. Shutting down gracefully...`);
 
     try {
+      // Stop customer simulator
+      this.customerSimulator.stop();
+
       // Close WebSocket connections
       if (this.wsManager) {
         this.wsManager.close();

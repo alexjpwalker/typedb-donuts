@@ -3,15 +3,30 @@ import { TransactionRepository } from '../repositories/TransactionRepository.js'
 import { OutletRepository } from '../repositories/OutletRepository.js';
 import { Order, OrderSide, OrderStatus, TradeMatch } from '../models/types.js';
 
+export interface TradeExecutedEvent {
+  buyerOutletId: string;
+  sellerOutletId: string;
+  quantity: number;
+  price: number;
+  totalAmount: number;
+}
+
+type TradeCallback = (event: TradeExecutedEvent) => void;
+
 export class MatchingEngine {
   private orderRepo: OrderRepository;
   private transactionRepo: TransactionRepository;
   private outletRepo: OutletRepository;
+  private tradeCallbacks: TradeCallback[] = [];
 
   constructor() {
     this.orderRepo = new OrderRepository();
     this.transactionRepo = new TransactionRepository();
     this.outletRepo = new OutletRepository();
+  }
+
+  onTradeExecuted(callback: TradeCallback): void {
+    this.tradeCallbacks.push(callback);
   }
 
   /**
@@ -176,6 +191,22 @@ export class MatchingEngine {
       console.log(`Trade executed: ${transaction.transactionId} - ${quantity} donuts @ $${price} = $${totalAmount}`);
       console.log(`  Buyer ${buyer.outletName} balance: $${buyer.balance} -> $${buyer.balance - totalAmount}`);
       console.log(`  Seller ${seller.outletName} balance: $${seller.balance} -> $${seller.balance + totalAmount}`);
+
+      // Emit trade event for stats tracking
+      const event: TradeExecutedEvent = {
+        buyerOutletId: buyOrder.outletId,
+        sellerOutletId: sellOrder.outletId,
+        quantity,
+        price,
+        totalAmount
+      };
+      for (const callback of this.tradeCallbacks) {
+        try {
+          callback(event);
+        } catch (error) {
+          console.error('Error in trade callback:', error);
+        }
+      }
     }
   }
 

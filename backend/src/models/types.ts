@@ -32,10 +32,12 @@ export interface Outlet {
 export interface OutletStats {
   outletId: string;
   outletName: string;
-  totalRevenue: number;
-  totalCosts: number;
-  netProfit: number;
+  balance: number;
+  customerSalesRevenue: number;
   customerSalesCount: number;
+  exchangeSalesRevenue: number;
+  exchangeSalesCount: number;
+  netProfit: number;
   averageMargin: number;
 }
 

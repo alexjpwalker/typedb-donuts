@@ -1,10 +1,11 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server as HTTPServer } from 'http';
 import { Order, Transaction, OrderBook } from '../models/types.js';
+import { CustomerEvent } from '../services/CustomerSimulator.js';
 
 export interface WebSocketMessage {
-  type: 'order_created' | 'order_updated' | 'trade_executed' | 'order_book_updated';
-  data: Order | Transaction | OrderBook;
+  type: 'order_created' | 'order_updated' | 'trade_executed' | 'order_book_updated' | 'customer_event';
+  data: Order | Transaction | OrderBook | CustomerEvent;
 }
 
 export class WebSocketManager {
@@ -101,6 +102,16 @@ export class WebSocketManager {
     this.broadcast({
       type: 'order_book_updated',
       data: orderBook
+    });
+  }
+
+  /**
+   * Notify clients of customer activity
+   */
+  notifyCustomerEvent(event: CustomerEvent): void {
+    this.broadcast({
+      type: 'customer_event',
+      data: event
     });
   }
 

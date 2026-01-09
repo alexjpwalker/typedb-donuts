@@ -4,10 +4,12 @@
   interface OutletStats {
     outletId: string;
     outletName: string;
-    totalRevenue: number;
-    totalCosts: number;
-    netProfit: number;
+    balance: number;
+    customerSalesRevenue: number;
     customerSalesCount: number;
+    exchangeSalesRevenue: number;
+    exchangeSalesCount: number;
+    netProfit: number;
     averageMargin: number;
   }
 
@@ -79,9 +81,10 @@
             <th>Rank</th>
             <th>Outlet</th>
             <th>Margin</th>
-            <th>Revenue</th>
+            <th>Balance</th>
+            <th>Customer Sales</th>
+            <th>Exchange Sales</th>
             <th>Net Profit</th>
-            <th>Sales</th>
           </tr>
         </thead>
         <tbody>
@@ -90,11 +93,18 @@
               <td class="rank">{getRankMedal(index)}</td>
               <td class="outlet-name">{stats.outletName}</td>
               <td class="margin">{stats.averageMargin}%</td>
-              <td class="revenue">${formatCurrency(stats.totalRevenue)}</td>
+              <td class="balance">${formatCurrency(stats.balance)}</td>
+              <td class="customer-sales">
+                ${formatCurrency(stats.customerSalesRevenue)}
+                <span class="count">({stats.customerSalesCount})</span>
+              </td>
+              <td class="exchange-sales">
+                ${formatCurrency(stats.exchangeSalesRevenue)}
+                <span class="count">({stats.exchangeSalesCount})</span>
+              </td>
               <td class="profit {getProfitClass(stats.netProfit)}">
                 ${formatCurrency(stats.netProfit)}
               </td>
-              <td class="sales-count">{stats.customerSalesCount}</td>
             </tr>
           {/each}
         </tbody>
@@ -216,9 +226,21 @@
     color: #7c3aed;
   }
 
-  .revenue {
+  .balance {
     font-weight: 500;
     color: #059669;
+  }
+
+  .customer-sales,
+  .exchange-sales {
+    font-weight: 500;
+    color: #0284c7;
+  }
+
+  .count {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-weight: normal;
   }
 
   .profit {
@@ -238,11 +260,6 @@
     color: #6b7280;
   }
 
-  .sales-count {
-    text-align: center;
-    font-weight: 500;
-    color: #6b7280;
-  }
 
   .loading,
   .error,
