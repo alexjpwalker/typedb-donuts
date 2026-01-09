@@ -1,5 +1,5 @@
 import { ExchangeService } from './ExchangeService.js';
-import { OrderSide } from '../models/types.js';
+import { OrderSide, Factory } from '../models/types.js';
 import { FACTORY_PAUSE_THRESHOLD, FACTORY_RESUME_THRESHOLD } from '../config/constants.js';
 
 /**
@@ -14,7 +14,7 @@ export class DonutSupplier {
   private shouldStop = false;
 
   // Supplier configuration
-  private readonly SUPPLIER_ID = 'supplier-factory';
+  private readonly DEFAULT_FACTORY_ID = 'main-factory';
   private readonly BASE_PRICE = 2.00;
   private readonly PRICE_VARIANCE = 0.50; // +/- $0.50
   private readonly MIN_QUANTITY = 20;
@@ -31,8 +31,8 @@ export class DonutSupplier {
       return;
     }
 
-    // Ensure supplier outlet exists
-    await this.ensureSupplierExists();
+    // Ensure factory exists
+    await this.ensureFactoryExists();
 
     this.isRunning = true;
     this.shouldStop = false;
@@ -74,46 +74,44 @@ export class DonutSupplier {
     console.log('Donut supplier stopped');
   }
 
-  private async ensureSupplierExists(): Promise<void> {
+  private async ensureFactoryExists(): Promise<void> {
     try {
-      const existing = await this.exchangeService.getOutlet(this.SUPPLIER_ID);
+      const existing = await this.exchangeService.getFactory();
       if (!existing) {
-        await this.exchangeService.createOutlet({
-          outletId: this.SUPPLIER_ID,
-          outletName: 'Donut Factory',
+        await this.exchangeService.createFactory({
+          factoryId: this.DEFAULT_FACTORY_ID,
+          factoryName: 'Donut Factory',
           location: 'Industrial District',
           balance: 1000000, // Unlimited funds essentially
-          marginPercent: 0,
-          isOpen: true // Manual control: factory starts enabled
-          // productionEnabled is managed in-memory by ExchangeService
+          isOpen: true, // Manual control: factory starts enabled
+          productionEnabled: true // Auto-regulation: production starts enabled
         });
-        console.log('Created supplier outlet: Donut Factory');
+        console.log('Created factory: Donut Factory');
       }
     } catch (error) {
-      console.error('Error ensuring supplier exists:', error);
+      console.error('Error ensuring factory exists:', error);
     }
   }
 
-  private async getFactoryState(): Promise<{ isOpen: boolean; productionEnabled: boolean }> {
+  private async getFactory(): Promise<Factory | null> {
     try {
-      const factory = await this.exchangeService.getOutlet(this.SUPPLIER_ID);
-      return {
-        isOpen: factory?.isOpen ?? false,
-        productionEnabled: factory?.productionEnabled ?? false
-      };
+      return await this.exchangeService.getFactory();
     } catch {
-      return { isOpen: false, productionEnabled: false };
+      return null;
     }
   }
 
   private async countActiveFactoryOrders(): Promise<number> {
     try {
+      const factory = await this.getFactory();
+      if (!factory) return 0;
+
       const donutTypes = await this.exchangeService.getAllDonutTypes();
       let totalOrders = 0;
       for (const dt of donutTypes) {
         const orderBook = await this.exchangeService.getOrderBook(dt.donutTypeId, false);
         // Count sell orders from the factory
-        totalOrders += orderBook.sellOrders.filter(o => o.outletId === this.SUPPLIER_ID).length;
+        totalOrders += orderBook.sellOrders.filter(o => o.outletId === factory.factoryId).length;
       }
       return totalOrders;
     } catch {
@@ -122,19 +120,20 @@ export class DonutSupplier {
   }
 
   private async autoRegulateFactory(): Promise<void> {
-    const { isOpen, productionEnabled } = await this.getFactoryState();
+    const factory = await this.getFactory();
+    if (!factory) return;
 
     // Only auto-regulate if factory is manually enabled (isOpen = true)
-    if (!isOpen) {
+    if (!factory.isOpen) {
       return;
     }
 
     const activeOrders = await this.countActiveFactoryOrders();
 
-    if (productionEnabled && activeOrders >= FACTORY_PAUSE_THRESHOLD) {
+    if (factory.productionEnabled && activeOrders >= FACTORY_PAUSE_THRESHOLD) {
       console.log(`🏭 Factory auto-pausing production: ${activeOrders} active orders (threshold: ${FACTORY_PAUSE_THRESHOLD})`);
       await this.exchangeService.setFactoryProductionEnabled(false);
-    } else if (!productionEnabled && activeOrders <= FACTORY_RESUME_THRESHOLD) {
+    } else if (!factory.productionEnabled && activeOrders <= FACTORY_RESUME_THRESHOLD) {
       console.log(`🏭 Factory auto-resuming production: ${activeOrders} active orders (threshold: ${FACTORY_RESUME_THRESHOLD})`);
       await this.exchangeService.setFactoryProductionEnabled(true);
     }
@@ -146,8 +145,8 @@ export class DonutSupplier {
       await this.autoRegulateFactory();
 
       // Check if factory is enabled AND production is enabled
-      const { isOpen, productionEnabled } = await this.getFactoryState();
-      if (!isOpen || !productionEnabled) {
+      const factory = await this.getFactory();
+      if (!factory || !factory.isOpen || !factory.productionEnabled) {
         return;
       }
 
@@ -168,7 +167,7 @@ export class DonutSupplier {
             donutTypeId: donutType.donutTypeId,
             quantity,
             pricePerUnit: price,
-            outletId: this.SUPPLIER_ID
+            outletId: factory.factoryId
           });
 
           console.log(`🏭 Factory supplied ${quantity} ${donutType.donutTypeId} @ $${price.toFixed(2)}`);
@@ -194,10 +193,10 @@ export class DonutSupplier {
     return Math.floor(Math.random() * (this.MAX_QUANTITY - this.MIN_QUANTITY + 1)) + this.MIN_QUANTITY;
   }
 
-  getStats(): { isRunning: boolean; supplierId: string } {
+  getStats(): { isRunning: boolean; factoryId: string } {
     return {
       isRunning: this.isRunning,
-      supplierId: this.SUPPLIER_ID
+      factoryId: this.DEFAULT_FACTORY_ID
     };
   }
 }

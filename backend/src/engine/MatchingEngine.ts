@@ -1,6 +1,7 @@
 import { OrderRepository } from '../repositories/OrderRepository.js';
 import { TransactionRepository } from '../repositories/TransactionRepository.js';
 import { OutletRepository } from '../repositories/OutletRepository.js';
+import { FactoryRepository } from '../repositories/FactoryRepository.js';
 import { Order, OrderSide, OrderStatus, TradeMatch } from '../models/types.js';
 
 export interface TradeExecutedEvent {
@@ -19,6 +20,7 @@ export class MatchingEngine {
   private orderRepo: OrderRepository;
   private transactionRepo: TransactionRepository;
   private outletRepo: OutletRepository;
+  private factoryRepo: FactoryRepository;
   private tradeCallbacks: TradeCallback[] = [];
   private errorCallbacks: ErrorCallback[] = [];
 
@@ -26,6 +28,7 @@ export class MatchingEngine {
     this.orderRepo = new OrderRepository();
     this.transactionRepo = new TransactionRepository();
     this.outletRepo = new OutletRepository();
+    this.factoryRepo = new FactoryRepository();
   }
 
   onTradeExecuted(callback: TradeCallback): void {
@@ -192,33 +195,44 @@ export class MatchingEngine {
       quantity,
       pricePerUnit: price,
       totalAmount,
-      buyerOutletId: buyOrder.outletId,
-      sellerOutletId: sellOrder.outletId,
+      buyerId: buyOrder.outletId,
+      sellerId: sellOrder.outletId,
       buyOrderId: buyOrder.orderId,
       sellOrderId: sellOrder.orderId
     });
 
     console.log(`[Trade] Transaction created: ${transaction.transactionId}`);
 
-    // Update outlet balances
+    // Update balances - buyer is always retail-outlet, seller can be factory or retail-outlet
     const buyer = await this.outletRepo.findById(buyOrder.outletId);
-    const seller = await this.outletRepo.findById(sellOrder.outletId);
+    const isFactorySeller = sellOrder.outletId.includes('factory');
 
     if (!buyer) {
       console.error(`[Trade] Buyer not found: ${buyOrder.outletId}`);
     }
-    if (!seller) {
-      console.error(`[Trade] Seller not found: ${sellOrder.outletId}`);
-    }
 
-    if (buyer && seller) {
-      // Buyer pays, seller receives
+    if (buyer) {
+      // Buyer pays
       await this.outletRepo.updateBalance(buyer.outletId, buyer.balance - totalAmount);
-      await this.outletRepo.updateBalance(seller.outletId, seller.balance + totalAmount);
-
       console.log(`Trade executed: ${transaction.transactionId} - ${quantity} donuts @ $${price} = $${totalAmount}`);
       console.log(`  Buyer ${buyer.outletName} balance: $${buyer.balance} -> $${buyer.balance - totalAmount}`);
-      console.log(`  Seller ${seller.outletName} balance: $${seller.balance} -> $${seller.balance + totalAmount}`);
+
+      // Update seller balance
+      if (isFactorySeller) {
+        // Factory seller - update factory balance
+        const factory = await this.factoryRepo.findById(sellOrder.outletId);
+        if (factory) {
+          await this.factoryRepo.updateBalance(factory.factoryId, factory.balance + totalAmount);
+          console.log(`  Seller ${factory.factoryName} balance: $${factory.balance} -> $${factory.balance + totalAmount}`);
+        }
+      } else {
+        // Retail-outlet seller
+        const seller = await this.outletRepo.findById(sellOrder.outletId);
+        if (seller) {
+          await this.outletRepo.updateBalance(seller.outletId, seller.balance + totalAmount);
+          console.log(`  Seller ${seller.outletName} balance: $${seller.balance} -> $${seller.balance + totalAmount}`);
+        }
+      }
 
       // Emit trade event for stats tracking
       const event: TradeExecutedEvent = {

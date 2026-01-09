@@ -1,5 +1,5 @@
 import { ExchangeService } from './ExchangeService.js';
-import { Outlet, DonutType, CustomerSale } from '../models/types.js';
+import { RetailOutlet, DonutType, CustomerSale } from '../models/types.js';
 
 // Customer behavior types
 export enum CustomerType {
@@ -18,7 +18,7 @@ export interface SimulatedCustomer {
 export interface CustomerEvent {
   eventType: 'customer_arrived' | 'customer_visiting' | 'customer_purchased' | 'customer_left';
   customer: SimulatedCustomer;
-  outlet?: Outlet;
+  outlet?: RetailOutlet;
   sale?: CustomerSale;
   message: string;
 }
@@ -142,11 +142,11 @@ export class CustomerSimulator {
     };
   }
 
-  private calculatePrice(outlet: Outlet): number {
+  private calculatePrice(outlet: RetailOutlet): number {
     return this.BASE_DONUT_PRICE * (1 + outlet.marginPercent / 100);
   }
 
-  private async processFirstFindCustomer(customer: SimulatedCustomer, outlets: Outlet[]): Promise<void> {
+  private async processFirstFindCustomer(customer: SimulatedCustomer, outlets: RetailOutlet[]): Promise<void> {
     // Shuffle outlets for random visiting order
     const shuffledOutlets = [...outlets].sort(() => Math.random() - 0.5);
 
@@ -204,13 +204,13 @@ export class CustomerSimulator {
     }
   }
 
-  private async processPriceHunterCustomer(customer: SimulatedCustomer, outlets: Outlet[]): Promise<void> {
+  private async processPriceHunterCustomer(customer: SimulatedCustomer, outlets: RetailOutlet[]): Promise<void> {
     // Price hunter checks all outlets first, then buys from cheapest with stock
     const openOutlets = outlets.filter(o => o.isOpen);
 
     for (const donutTypeId of customer.shoppingList) {
       // Find cheapest outlet that has stock
-      let cheapestOutlet: Outlet | null = null;
+      let cheapestOutlet: RetailOutlet | null = null;
       let cheapestPrice = Infinity;
       let availableStock = 0;
 

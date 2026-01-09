@@ -13,19 +13,31 @@ export enum OrderSide {
   SELL = 'sell'
 }
 
-export interface Outlet {
-  outletId: string;
-  outletName: string;
+export interface Factory {
+  factoryId: string;
+  factoryName: string;
   location: string;
-  balance?: number; // Optional since some old outlets may not have it
-  marginPercent?: number; // Retail markup percentage
-  isOpen?: boolean; // Whether outlet is open for business
-  productionEnabled?: boolean; // For factory only: whether auto-regulation allows production
+  balance: number;
+  isOpen: boolean; // Manual control: whether factory is enabled
+  productionEnabled: boolean; // Auto-regulation: whether production is active
   createdAt: string;
 }
 
+export interface RetailOutlet {
+  outletId: string;
+  outletName: string;
+  location: string;
+  balance: number;
+  marginPercent: number; // Retail markup percentage
+  isOpen: boolean; // Whether outlet is open for business
+  createdAt: string;
+}
+
+// Alias for backwards compatibility and general use
+export type Outlet = RetailOutlet;
+
 export interface FactoryStatus {
-  factory: Outlet;
+  factory: Factory;
   activeOrders: number;
   pauseThreshold: number;
   resumeThreshold: number;
@@ -63,8 +75,8 @@ export interface Transaction {
   quantity: number;
   pricePerUnit: number;
   totalAmount: number;
-  buyerOutletId: string;
-  sellerOutletId: string;
+  buyerId: string;    // outlet-id of buyer (retail outlet)
+  sellerId: string;   // factory-id or outlet-id of seller
   buyOrderId: string;
   sellOrderId: string;
   executedAt: string;

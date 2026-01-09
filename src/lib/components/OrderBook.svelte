@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { orderBook, bestBid, bestAsk, spread, showFilledOrders, refreshOrderBook, selectedDonutType, donutTypes } from '../stores';
+  import { orderBook, bestBid, bestAsk, spread, showFilledOrders, refreshOrderBook, selectedDonutType, donutTypes, outlets } from '../stores';
   import { OrderStatus } from '../types';
 
   function formatPrice(price: number): string {
@@ -13,6 +13,14 @@
 
   function isActive(status: OrderStatus): boolean {
     return status === OrderStatus.ACTIVE;
+  }
+
+  function getPlacerName(id: string): string {
+    if (id.includes('factory')) {
+      return 'Factory';
+    }
+    const outlet = $outlets.find(o => o.outletId === id);
+    return outlet?.outletName?.replace(/ (Donuts|Bakery|Shop)$/, '') || id;
   }
 
   function handleTypeChange(event: Event) {
@@ -57,15 +65,17 @@
       <!-- Asks (Sell Orders) -->
       <div class="asks-section">
         <h3 class="section-title sell">Asks (Sell Orders)</h3>
-        <div class="orders-header">
+        <div class="orders-header five-col">
+          <span>Seller</span>
           <span>Type</span>
           <span>Price</span>
-          <span>Quantity</span>
+          <span>Qty</span>
           <span>Time</span>
         </div>
         <div class="orders-list">
           {#each $orderBook.sellOrders as order (order.orderId)}
-            <div class="order-row sell" class:filled={!isActive(order.status)}>
+            <div class="order-row sell five-col" class:filled={!isActive(order.status)}>
+              <span class="placer">{getPlacerName(order.outletId)}</span>
               <span class="donut-type-cell">{order.donutTypeId || $orderBook.donutTypeId}</span>
               <span class="price">${formatPrice(order.pricePerUnit)}</span>
               <span class="quantity">{order.quantity}</span>
@@ -91,15 +101,17 @@
       <!-- Bids (Buy Orders) -->
       <div class="bids-section">
         <h3 class="section-title buy">Bids (Buy Orders)</h3>
-        <div class="orders-header">
+        <div class="orders-header five-col">
+          <span>Buyer</span>
           <span>Type</span>
           <span>Price</span>
-          <span>Quantity</span>
+          <span>Qty</span>
           <span>Time</span>
         </div>
         <div class="orders-list">
           {#each $orderBook.buyOrders as order (order.orderId)}
-            <div class="order-row buy" class:filled={!isActive(order.status)}>
+            <div class="order-row buy five-col" class:filled={!isActive(order.status)}>
+              <span class="placer">{getPlacerName(order.outletId)}</span>
               <span class="donut-type-cell">{order.donutTypeId || $orderBook.donutTypeId}</span>
               <span class="price">${formatPrice(order.pricePerUnit)}</span>
               <span class="quantity">{order.quantity}</span>
@@ -218,6 +230,10 @@
     color: #666;
   }
 
+  .orders-header.five-col {
+    grid-template-columns: 1.2fr 1fr 0.8fr 0.6fr 0.8fr;
+  }
+
   .orders-list {
     max-height: 300px;
     overflow-y: auto;
@@ -230,6 +246,16 @@
     padding: 0.5rem;
     border-bottom: 1px solid #e5e7eb;
     font-size: 0.875rem;
+  }
+
+  .order-row.five-col {
+    grid-template-columns: 1.2fr 1fr 0.8fr 0.6fr 0.8fr;
+  }
+
+  .placer {
+    font-weight: 500;
+    color: #4b5563;
+    font-size: 0.8rem;
   }
 
   .donut-type-cell {

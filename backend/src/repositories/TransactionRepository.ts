@@ -41,11 +41,25 @@ export class TransactionRepository {
     await this.getHelper().executeWriteQuery(insertTxn);
     console.log(`[Timing] Insert transaction: ${Date.now() - t1}ms`);
 
-    const insertRelation = `
+    // Buyer is always a retail-outlet, seller can be factory or retail-outlet
+    // Try factory first, then retail-outlet
+    const isFactorySeller = transaction.sellerId.includes('factory');
+
+    const insertRelation = isFactorySeller ? `
       match
         $txn isa transaction, has transaction-id "${transactionId}";
-        $buyer isa outlet, has outlet-id "${transaction.buyerOutletId}";
-        $seller isa outlet, has outlet-id "${transaction.sellerOutletId}";
+        $buyer isa retail-outlet, has outlet-id "${transaction.buyerId}";
+        $seller isa factory, has factory-id "${transaction.sellerId}";
+        $buy-order isa buy-order, has order-id "${transaction.buyOrderId}";
+        $sell-order isa sell-order, has order-id "${transaction.sellOrderId}";
+      insert
+        (buyer: $buyer, seller: $seller, trade: $txn, buy-order: $buy-order, sell-order: $sell-order) isa trade-execution,
+          has donut-type-id "${transaction.donutTypeId}";
+    ` : `
+      match
+        $txn isa transaction, has transaction-id "${transactionId}";
+        $buyer isa retail-outlet, has outlet-id "${transaction.buyerId}";
+        $seller isa retail-outlet, has outlet-id "${transaction.sellerId}";
         $buy-order isa buy-order, has order-id "${transaction.buyOrderId}";
         $sell-order isa sell-order, has order-id "${transaction.sellOrderId}";
       insert
@@ -63,8 +77,8 @@ export class TransactionRepository {
       quantity: transaction.quantity,
       pricePerUnit: transaction.pricePerUnit,
       totalAmount: transaction.totalAmount,
-      buyerOutletId: transaction.buyerOutletId,
-      sellerOutletId: transaction.sellerOutletId,
+      buyerId: transaction.buyerId,
+      sellerId: transaction.sellerId,
       buyOrderId: transaction.buyOrderId,
       sellOrderId: transaction.sellOrderId,
       executedAt: new Date(now)

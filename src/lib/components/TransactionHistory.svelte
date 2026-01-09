@@ -10,9 +10,14 @@
     return price.toFixed(2);
   }
 
-  function getOutletName(outletId: string): string {
-    const outlet = $outlets.find(o => o.outletId === outletId);
-    return outlet?.outletName || outletId;
+  function getParticipantName(id: string): string {
+    // Check if it's the factory
+    if (id.includes('factory')) {
+      return 'Donut Factory';
+    }
+    // Otherwise look up the outlet
+    const outlet = $outlets.find(o => o.outletId === id);
+    return outlet?.outletName || id;
   }
 </script>
 
@@ -39,11 +44,11 @@
               </div>
               <div class="detail-row">
                 <span class="label">Buyer:</span>
-                <span class="value buyer">{getOutletName(tx.buyerOutletId)}</span>
+                <span class="value buyer">{getParticipantName(tx.buyerId)}</span>
               </div>
               <div class="detail-row">
                 <span class="label">Seller:</span>
-                <span class="value seller">{getOutletName(tx.sellerOutletId)}</span>
+                <span class="value seller">{getParticipantName(tx.sellerId)}</span>
               </div>
             </div>
           </div>

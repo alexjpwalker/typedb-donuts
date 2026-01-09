@@ -28,7 +28,7 @@ export class InventoryRepository {
   async getInventory(outletId: string, donutTypeId: string): Promise<number> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       $inv isa inventory, has donut-type-id "${donutTypeId}";
       (holder: $outlet, inventory: $inv) isa inventory-holding;
       fetch {
@@ -51,7 +51,7 @@ export class InventoryRepository {
   async getAllInventoryForOutlet(outletId: string): Promise<Map<string, number>> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       $inv isa inventory;
       (holder: $outlet, inventory: $inv) isa inventory-holding;
       fetch {
@@ -86,7 +86,7 @@ export class InventoryRepository {
       // Update existing inventory
       const query = `
         match
-        $outlet isa outlet, has outlet-id "${outletId}";
+        $outlet isa retail-outlet, has outlet-id "${outletId}";
         $inv isa inventory, has donut-type-id "${donutTypeId}";
         (holder: $outlet, inventory: $inv) isa inventory-holding;
         update
@@ -97,7 +97,7 @@ export class InventoryRepository {
       // Create new inventory record with relation
       const query = `
         match
-        $outlet isa outlet, has outlet-id "${outletId}";
+        $outlet isa retail-outlet, has outlet-id "${outletId}";
         insert
         $inv isa inventory,
           has donut-type-id "${donutTypeId}",
@@ -112,7 +112,7 @@ export class InventoryRepository {
   private async inventoryExists(outletId: string, donutTypeId: string): Promise<boolean> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       $inv isa inventory, has donut-type-id "${donutTypeId}";
       (holder: $outlet, inventory: $inv) isa inventory-holding;
       fetch {
@@ -145,7 +145,7 @@ export class InventoryRepository {
   async getAllInventory(): Promise<InventoryRecord[]> {
     const query = `
       match
-      $outlet isa outlet;
+      $outlet isa retail-outlet;
       $inv isa inventory;
       (holder: $outlet, inventory: $inv) isa inventory-holding;
       fetch {

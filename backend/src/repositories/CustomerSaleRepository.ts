@@ -43,7 +43,7 @@ export class CustomerSaleRepository {
     const insertRelation = `
       match
         $sale isa customer-sale-record, has sale-id "${sale.saleId}";
-        $outlet isa outlet, has outlet-id "${sale.outletId}";
+        $outlet isa retail-outlet, has outlet-id "${sale.outletId}";
       insert
         (seller: $outlet, sale: $sale) isa customer-sale,
           has donut-type-id "${sale.donutTypeId}";
@@ -57,7 +57,7 @@ export class CustomerSaleRepository {
   async findByOutlet(outletId: string): Promise<CustomerSale[]> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       $sale isa customer-sale-record;
       (seller: $outlet, sale: $sale) isa customer-sale, has donut-type-id $dtype;
       fetch {
@@ -97,7 +97,7 @@ export class CustomerSaleRepository {
   async getOutletSalesStats(outletId: string): Promise<{ revenue: number; count: number }> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       $sale isa customer-sale-record, has revenue $rev;
       (seller: $outlet, sale: $sale) isa customer-sale;
       fetch {
@@ -124,7 +124,7 @@ export class CustomerSaleRepository {
   async getAllOutletSalesStats(): Promise<Map<string, { revenue: number; count: number }>> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id $oid;
+      $outlet isa retail-outlet, has outlet-id $oid;
       $sale isa customer-sale-record, has revenue $rev;
       (seller: $outlet, sale: $sale) isa customer-sale;
       fetch {

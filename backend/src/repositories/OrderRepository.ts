@@ -36,9 +36,15 @@ export class OrderRepository {
     const now = this.formatDateTime(new Date());
     const orderType = order.side === OrderSide.BUY ? 'buy-order' : 'sell-order';
 
+    // Determine if placer is factory or retail-outlet based on ID
+    const isFactory = order.outletId.includes('factory');
+    const placerMatch = isFactory
+      ? `$placer isa factory, has factory-id "${order.outletId}"`
+      : `$placer isa retail-outlet, has outlet-id "${order.outletId}"`;
+
     const queries = [
       `insert $order isa ${orderType}, has order-id "${orderId}", has quantity ${order.quantity}, has price-per-unit ${order.pricePerUnit}, has status "${OrderStatus.ACTIVE}", has created-at ${now}, has updated-at ${now};`,
-      `match $order isa order, has order-id "${orderId}"; $outlet isa outlet, has outlet-id "${order.outletId}"; insert $placement isa order-placement, has donut-type-id "${order.donutTypeId}"; $placement links (placer: $outlet, order: $order);`
+      `match $order isa order, has order-id "${orderId}"; ${placerMatch}; insert $placement isa order-placement, has donut-type-id "${order.donutTypeId}"; $placement links (placer: $placer, order: $order);`
     ];
 
     await this.getHelper().executeTransaction(queries);
@@ -59,13 +65,15 @@ export class OrderRepository {
   async findById(orderId: string): Promise<Order | null> {
     const helper = this.getHelper();
 
-    const query = `
+    // Try finding order with retail-outlet placer
+    const outletQuery = `
       match
         $order isa order,
           has order-id "${orderId}";
         $placement isa order-placement,
           links (placer: $outlet, order: $order),
           has donut-type-id $donut_type;
+        $outlet isa retail-outlet;
       fetch {
         "orderId": $order.order-id,
         "outletId": $outlet.outlet-id,
@@ -78,8 +86,33 @@ export class OrderRepository {
       };
     `;
 
+    // Try finding order with factory placer
+    const factoryQuery = `
+      match
+        $order isa order,
+          has order-id "${orderId}";
+        $placement isa order-placement,
+          links (placer: $factory, order: $order),
+          has donut-type-id $donut_type;
+        $factory isa factory;
+      fetch {
+        "orderId": $order.order-id,
+        "outletId": $factory.factory-id,
+        "quantity": $order.quantity,
+        "pricePerUnit": $order.price-per-unit,
+        "status": $order.status,
+        "createdAt": $order.created-at,
+        "updatedAt": $order.updated-at,
+        "donutTypeId": $donut_type
+      };
+    `;
+
     try {
-      const response = await helper.executeReadQuery(query);
+      // Try outlet first, then factory
+      let response = await helper.executeReadQuery(outletQuery);
+      if (!(response.answerType === 'conceptDocuments' && (response.answers as any[]).length > 0)) {
+        response = await helper.executeReadQuery(factoryQuery);
+      }
 
       if (response.answerType === 'conceptDocuments' && (response.answers as any[]).length > 0) {
         const doc = (response.answers as any[])[0];
@@ -114,15 +147,15 @@ export class OrderRepository {
   async getOrderBook(donutTypeId: string, includeAll: boolean = false): Promise<OrderBook> {
     const helper = this.getHelper();
 
-    // Query sell orders (TypeDB 3.x syntax with 'links')
-    // We fetch all and filter client-side since TypeDB OR syntax is complex
-    const sellQuery = `
+    // Query sell orders from retail-outlets
+    const sellFromOutletQuery = `
       match
         $order isa sell-order,
           has status $status;
         $placement isa order-placement,
           links (placer: $outlet, order: $order),
           has donut-type-id "${donutTypeId}";
+        $outlet isa retail-outlet;
       fetch {
         "orderId": $order.order-id,
         "outletId": $outlet.outlet-id,
@@ -133,7 +166,26 @@ export class OrderRepository {
       };
     `;
 
-    // Query buy orders (TypeDB 3.x syntax with 'links')
+    // Query sell orders from factory
+    const sellFromFactoryQuery = `
+      match
+        $order isa sell-order,
+          has status $status;
+        $placement isa order-placement,
+          links (placer: $factory, order: $order),
+          has donut-type-id "${donutTypeId}";
+        $factory isa factory;
+      fetch {
+        "orderId": $order.order-id,
+        "outletId": $factory.factory-id,
+        "quantity": $order.quantity,
+        "pricePerUnit": $order.price-per-unit,
+        "status": $status,
+        "createdAt": $order.created-at
+      };
+    `;
+
+    // Query buy orders (only from retail-outlets per schema)
     const buyQuery = `
       match
         $order isa buy-order,
@@ -141,6 +193,7 @@ export class OrderRepository {
         $placement isa order-placement,
           links (placer: $outlet, order: $order),
           has donut-type-id "${donutTypeId}";
+        $outlet isa retail-outlet;
       fetch {
         "orderId": $order.order-id,
         "outletId": $outlet.outlet-id,
@@ -152,16 +205,33 @@ export class OrderRepository {
     `;
 
     try {
-      const [sellResponse, buyResponse] = await Promise.all([
-        helper.executeReadQuery(sellQuery),
+      const [sellOutletResponse, sellFactoryResponse, buyResponse] = await Promise.all([
+        helper.executeReadQuery(sellFromOutletQuery),
+        helper.executeReadQuery(sellFromFactoryQuery),
         helper.executeReadQuery(buyQuery)
       ]);
 
       const sellOrders: OrderBookEntry[] = [];
       const buyOrders: OrderBookEntry[] = [];
 
-      if (sellResponse.answerType === 'conceptDocuments') {
-        for (const doc of sellResponse.answers as any[]) {
+      // Process sell orders from retail outlets
+      if (sellOutletResponse.answerType === 'conceptDocuments') {
+        for (const doc of sellOutletResponse.answers as any[]) {
+          sellOrders.push({
+            orderId: doc.orderId,
+            outletId: doc.outletId,
+            donutTypeId,
+            quantity: doc.quantity,
+            pricePerUnit: doc.pricePerUnit,
+            status: parseStatus(doc.status),
+            createdAt: new Date(doc.createdAt)
+          });
+        }
+      }
+
+      // Process sell orders from factory
+      if (sellFactoryResponse.answerType === 'conceptDocuments') {
+        for (const doc of sellFactoryResponse.answers as any[]) {
           sellOrders.push({
             orderId: doc.orderId,
             outletId: doc.outletId,

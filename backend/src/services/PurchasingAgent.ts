@@ -4,7 +4,7 @@ import {
   PurchasingStrategy,
   PurchasingThreshold,
   OrderSide,
-  Outlet
+  RetailOutlet
 } from '../models/types.js';
 
 /**
@@ -51,9 +51,6 @@ export class PurchasingAgent {
     const donutTypes = await this.exchangeService.getAllDonutTypes();
 
     for (const outlet of outlets) {
-      // Skip the supplier factory
-      if (outlet.outletId === 'supplier-factory') continue;
-
       // Create default strategies based on outlet's margin
       // Low margin outlets buy more aggressively (need volume)
       // High margin outlets can be pickier (rely on markup)
@@ -70,7 +67,7 @@ export class PurchasingAgent {
   /**
    * Create a default purchasing strategy based on outlet characteristics
    */
-  private createDefaultStrategy(donutTypeId: string, outlet: Outlet): PurchasingStrategy {
+  private createDefaultStrategy(donutTypeId: string, outlet: RetailOutlet): PurchasingStrategy {
     // Base thresholds - adjust based on margin
     // Low margin (20%) = aggressive buying, high volume
     // High margin (50%) = selective buying, lower volume
@@ -167,9 +164,6 @@ export class PurchasingAgent {
       const donutTypes = await this.exchangeService.getAllDonutTypes();
 
       for (const outlet of outlets) {
-        // Skip the supplier factory
-        if (outlet.outletId === 'supplier-factory') continue;
-
         // Skip if already configured
         if (this.configs.has(outlet.outletId)) continue;
 
@@ -204,7 +198,7 @@ export class PurchasingAgent {
   /**
    * Execute a single purchasing strategy for an outlet
    */
-  private async executeStrategy(outlet: Outlet, strategy: PurchasingStrategy): Promise<void> {
+  private async executeStrategy(outlet: RetailOutlet, strategy: PurchasingStrategy): Promise<void> {
     const currentStock = this.exchangeService.getOutletInventory(outlet.outletId, strategy.donutTypeId);
 
     // Check each threshold tier (ordered by maxPrice ascending)

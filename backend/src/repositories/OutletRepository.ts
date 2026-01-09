@@ -1,6 +1,6 @@
 import { TypeDBConnection } from '../config/typedb.js';
 import { TransactionHelper } from '../config/transaction-helper.js';
-import { Outlet } from '../models/types.js';
+import { RetailOutlet } from '../models/types.js';
 
 export class OutletRepository {
   private connection: TypeDBConnection;
@@ -19,46 +19,37 @@ export class OutletRepository {
     return this.helper;
   }
 
-  async create(outlet: Omit<Outlet, 'createdAt'>): Promise<Outlet> {
-    // TypeDB expects datetime in ISO 8601 format without timezone (YYYY-MM-DDTHH:MM:SS.sss)
+  async create(outlet: Omit<RetailOutlet, 'createdAt'>): Promise<RetailOutlet> {
     const now = new Date().toISOString().replace('Z', '');
-    const marginPercent = outlet.marginPercent || 25.0; // Default 25% margin
-    const isOpen = outlet.isOpen !== undefined ? outlet.isOpen : true; // Default to open
-    const productionEnabled = outlet.productionEnabled !== undefined ? outlet.productionEnabled : true; // Default to enabled
+    const marginPercent = outlet.marginPercent || 25.0;
+    const isOpen = outlet.isOpen !== undefined ? outlet.isOpen : true;
 
-    // Build query - productionEnabled is optional (only for factory)
-    let query = `
+    const query = `
       insert
-      $outlet isa outlet,
+      $outlet isa retail-outlet,
         has outlet-id "${outlet.outletId}",
         has outlet-name "${outlet.outletName}",
         has location "${outlet.location}",
         has balance ${outlet.balance},
         has margin-percent ${marginPercent},
-        has outlet-open ${isOpen},
-        has created-at ${now}`;
-
-    // Only add production-enabled for factory outlets
-    if (outlet.outletId === 'supplier-factory') {
-      query += `,
-        has production-enabled ${productionEnabled}`;
-    }
-
-    query += `;`;
+        has is-open ${isOpen},
+        has created-at ${now};
+    `;
 
     await this.getHelper().executeWriteQuery(query);
 
     return {
       ...outlet,
-      productionEnabled: outlet.outletId === 'supplier-factory' ? productionEnabled : undefined,
+      marginPercent,
+      isOpen,
       createdAt: new Date()
     };
   }
 
-  async findById(outletId: string): Promise<Outlet | null> {
+  async findById(outletId: string): Promise<RetailOutlet | null> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       fetch { $outlet.* };
     `;
 
@@ -73,8 +64,7 @@ export class OutletRepository {
         location: doc.location,
         balance: doc.balance,
         marginPercent: doc['margin-percent'] || 25.0,
-        isOpen: doc['outlet-open'] !== undefined ? doc['outlet-open'] : true,
-        productionEnabled: doc['production-enabled'],
+        isOpen: doc['is-open'] !== undefined ? doc['is-open'] : true,
         createdAt: new Date(doc['created-at'])
       };
     }
@@ -82,10 +72,10 @@ export class OutletRepository {
     return null;
   }
 
-  async findAll(): Promise<Outlet[]> {
+  async findAll(): Promise<RetailOutlet[]> {
     const query = `
       match
-      $outlet isa outlet;
+      $outlet isa retail-outlet;
       fetch { $outlet.* };
     `;
 
@@ -98,8 +88,7 @@ export class OutletRepository {
         location: doc.location,
         balance: doc.balance,
         marginPercent: doc['margin-percent'] || 25.0,
-        isOpen: doc['outlet-open'] !== undefined ? doc['outlet-open'] : true,
-        productionEnabled: doc['production-enabled'],
+        isOpen: doc['is-open'] !== undefined ? doc['is-open'] : true,
         createdAt: new Date(doc['created-at'])
       }));
     }
@@ -110,7 +99,7 @@ export class OutletRepository {
   async updateBalance(outletId: string, newBalance: number): Promise<void> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       update
       $outlet has balance ${newBalance};
     `;
@@ -121,7 +110,7 @@ export class OutletRepository {
   async updateMargin(outletId: string, newMarginPercent: number): Promise<void> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       update
       $outlet has margin-percent ${newMarginPercent};
     `;
@@ -132,9 +121,9 @@ export class OutletRepository {
   async toggleOpen(outletId: string, isOpen: boolean): Promise<void> {
     const query = `
       match
-      $outlet isa outlet, has outlet-id "${outletId}";
+      $outlet isa retail-outlet, has outlet-id "${outletId}";
       update
-      $outlet has outlet-open ${isOpen};
+      $outlet has is-open ${isOpen};
     `;
 
     await this.getHelper().executeWriteQuery(query);
@@ -143,20 +132,9 @@ export class OutletRepository {
   async toggleAllOpen(isOpen: boolean): Promise<void> {
     const query = `
       match
-      $outlet isa outlet;
+      $outlet isa retail-outlet;
       update
-      $outlet has outlet-open ${isOpen};
-    `;
-
-    await this.getHelper().executeWriteQuery(query);
-  }
-
-  async setProductionEnabled(outletId: string, enabled: boolean): Promise<void> {
-    const query = `
-      match
-      $outlet isa outlet, has outlet-id "${outletId}";
-      update
-      $outlet has production-enabled ${enabled};
+      $outlet has is-open ${isOpen};
     `;
 
     await this.getHelper().executeWriteQuery(query);

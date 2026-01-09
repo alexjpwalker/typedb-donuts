@@ -1,11 +1,12 @@
 import { OrderRepository } from '../repositories/OrderRepository.js';
 import { TransactionRepository } from '../repositories/TransactionRepository.js';
 import { OutletRepository } from '../repositories/OutletRepository.js';
+import { FactoryRepository } from '../repositories/FactoryRepository.js';
 import { DonutTypeRepository } from '../repositories/DonutTypeRepository.js';
 import { InventoryRepository } from '../repositories/InventoryRepository.js';
 import { CustomerSaleRepository } from '../repositories/CustomerSaleRepository.js';
 import { MatchingEngine } from '../engine/MatchingEngine.js';
-import { CreateOrderRequest, Order, OrderBook, Transaction, Outlet, DonutType, OutletStats, CustomerSale } from '../models/types.js';
+import { CreateOrderRequest, Order, OrderBook, Transaction, RetailOutlet, Factory, DonutType, OutletStats, CustomerSale } from '../models/types.js';
 import { OUTLET_STARTING_BALANCE, FACTORY_PAUSE_THRESHOLD, FACTORY_RESUME_THRESHOLD } from '../config/constants.js';
 
 type OrderBookUpdatedCallback = (orderBook: OrderBook) => void;
@@ -25,6 +26,7 @@ export class ExchangeService {
   private orderRepo: OrderRepository;
   private transactionRepo: TransactionRepository;
   private outletRepo: OutletRepository;
+  private factoryRepo: FactoryRepository;
   private donutTypeRepo: DonutTypeRepository;
   private inventoryRepo: InventoryRepository;
   private customerSaleRepo: CustomerSaleRepository;
@@ -43,6 +45,7 @@ export class ExchangeService {
     this.orderRepo = new OrderRepository();
     this.transactionRepo = new TransactionRepository();
     this.outletRepo = new OutletRepository();
+    this.factoryRepo = new FactoryRepository();
     this.donutTypeRepo = new DonutTypeRepository();
     this.inventoryRepo = new InventoryRepository();
     this.customerSaleRepo = new CustomerSaleRepository();
@@ -135,9 +138,6 @@ export class ExchangeService {
       outletStats.customerSalesCount = stats.count;
     }
     console.log(`Loaded customer sales stats for ${customerStats.size} outlets`);
-
-    // Exchange sales stats are already tracked via transactions in DB
-    // We could load from trade-execution relations if needed
   }
 
   async start(): Promise<void> {
@@ -147,12 +147,12 @@ export class ExchangeService {
 
     // Subscribe to trade events for stats and inventory tracking
     this.matchingEngine.onTradeExecuted(async (event) => {
-      // Track exchange sale for the seller
+      // Track exchange sale for the seller (could be factory or outlet)
       const sellerStats = this.getOrCreateStats(event.sellerOutletId);
       sellerStats.exchangeSalesRevenue += event.totalAmount;
       sellerStats.exchangeSalesCount += 1;
 
-      // Add inventory to the buyer (persisted to DB)
+      // Add inventory to the buyer (only retail outlets hold inventory)
       await this.addInventory(event.buyerOutletId, event.donutTypeId, event.quantity);
       console.log(`📦 Inventory: ${event.buyerOutletId} received ${event.quantity} ${event.donutTypeId} donuts`);
     });
@@ -193,10 +193,12 @@ export class ExchangeService {
   // ==========================================
 
   async createOrder(request: CreateOrderRequest): Promise<Order> {
-    // Validate outlet exists
-    const outlet = await this.outletRepo.findById(request.outletId);
-    if (!outlet) {
-      throw new Error(`Outlet not found: ${request.outletId}`);
+    // Validate placer exists (could be factory or retail outlet)
+    const factory = await this.factoryRepo.findById(request.outletId);
+    const outlet = factory ? null : await this.outletRepo.findById(request.outletId);
+
+    if (!factory && !outlet) {
+      throw new Error(`Placer not found: ${request.outletId}`);
     }
 
     // Validate donut type exists
@@ -265,34 +267,24 @@ export class ExchangeService {
   }
 
   // ==========================================
-  // Outlet Management
+  // Factory Management
   // ==========================================
 
-  async createOutlet(outlet: Omit<Outlet, 'createdAt'>): Promise<Outlet> {
-    return await this.outletRepo.create(outlet);
+  async createFactory(factory: Omit<Factory, 'createdAt'>): Promise<Factory> {
+    return await this.factoryRepo.create(factory);
   }
 
-  async getOutlet(outletId: string): Promise<Outlet | null> {
-    return await this.outletRepo.findById(outletId);
-  }
-
-  async getAllOutlets(): Promise<Outlet[]> {
-    const outlets = await this.outletRepo.findAll();
-    // Filter out the supplier factory - it's internal infrastructure, not a retail outlet
-    return outlets.filter(o => o.outletId !== 'supplier-factory');
-  }
-
-  async getFactory(): Promise<Outlet | null> {
-    return await this.outletRepo.findById('supplier-factory');
+  async getFactory(): Promise<Factory | null> {
+    return await this.factoryRepo.findFirst();
   }
 
   async getFactoryStatus(): Promise<{
-    factory: Outlet;
+    factory: Factory;
     activeOrders: number;
     pauseThreshold: number;
     resumeThreshold: number;
   } | null> {
-    const factory = await this.outletRepo.findById('supplier-factory');
+    const factory = await this.factoryRepo.findFirst();
     if (!factory) return null;
 
     // Count active factory sell orders across all donut types
@@ -300,7 +292,7 @@ export class ExchangeService {
     let activeOrders = 0;
     for (const dt of donutTypes) {
       const orderBook = await this.orderRepo.getOrderBook(dt.donutTypeId, false);
-      activeOrders += orderBook.sellOrders.filter(o => o.outletId === 'supplier-factory').length;
+      activeOrders += orderBook.sellOrders.filter(o => o.outletId === factory.factoryId).length;
     }
 
     return {
@@ -312,15 +304,37 @@ export class ExchangeService {
   }
 
   async toggleFactoryOpen(isOpen: boolean): Promise<void> {
-    await this.outletRepo.toggleOpen('supplier-factory', isOpen);
+    const factory = await this.factoryRepo.findFirst();
+    if (!factory) throw new Error('Factory not found');
+
+    await this.factoryRepo.toggleOpen(factory.factoryId, isOpen);
     // When manually enabling factory, also enable production
     if (isOpen) {
-      await this.outletRepo.setProductionEnabled('supplier-factory', true);
+      await this.factoryRepo.setProductionEnabled(factory.factoryId, true);
     }
   }
 
   async setFactoryProductionEnabled(enabled: boolean): Promise<void> {
-    await this.outletRepo.setProductionEnabled('supplier-factory', enabled);
+    const factory = await this.factoryRepo.findFirst();
+    if (!factory) throw new Error('Factory not found');
+
+    await this.factoryRepo.setProductionEnabled(factory.factoryId, enabled);
+  }
+
+  // ==========================================
+  // Retail Outlet Management
+  // ==========================================
+
+  async createOutlet(outlet: Omit<RetailOutlet, 'createdAt'>): Promise<RetailOutlet> {
+    return await this.outletRepo.create(outlet);
+  }
+
+  async getOutlet(outletId: string): Promise<RetailOutlet | null> {
+    return await this.outletRepo.findById(outletId);
+  }
+
+  async getAllOutlets(): Promise<RetailOutlet[]> {
+    return await this.outletRepo.findAll();
   }
 
   // ==========================================
@@ -379,7 +393,6 @@ export class ExchangeService {
     await this.removeInventory(outletId, donutTypeId, quantity);
 
     // Simplified: assume outlet bought donuts at $2/unit on the exchange
-    // In reality, we'd track actual inventory cost basis
     const costBasis = 2.0 * quantity;
     const revenue = costBasis * (1 + outlet.marginPercent / 100);
     const profit = revenue - costBasis;
@@ -440,10 +453,7 @@ export class ExchangeService {
   async getLeaderboard(): Promise<OutletStats[]> {
     const outlets = await this.outletRepo.findAll();
 
-    // Filter out the supplier factory - it's not a competing outlet
-    const retailOutlets = outlets.filter(o => o.outletId !== 'supplier-factory');
-
-    const leaderboard = retailOutlets.map(outlet => {
+    const leaderboard = outlets.map(outlet => {
       const stats = this.getOrCreateStats(outlet.outletId);
       const netProfit = outlet.balance - OUTLET_STARTING_BALANCE;
       return {

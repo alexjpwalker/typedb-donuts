@@ -4,23 +4,33 @@ define
 # Attributes
 # ==========================================
 
-attribute outlet-id, value string;
-attribute outlet-name, value string;
-attribute location, value string;
-attribute balance, value double;
-attribute margin-percent, value double;
-attribute outlet-open, value boolean;
+# Factory attributes
+attribute factory-id, value string;
+attribute factory-name, value string;
 attribute production-enabled, value boolean;
 
+# Retail outlet attributes
+attribute outlet-id, value string;
+attribute outlet-name, value string;
+attribute margin-percent, value double;
+
+# Shared attributes
+attribute location, value string;
+attribute balance, value double;
+attribute is-open, value boolean;
+
+# Donut type attributes
 attribute donut-type-id, value string;
 attribute donut-name, value string;
 attribute description, value string;
 
+# Order attributes
 attribute order-id, value string;
 attribute quantity, value integer;
 attribute price-per-unit, value double;
 attribute status, value string;
 
+# Transaction attributes
 attribute transaction-id, value string;
 attribute total-amount, value double;
 attribute cost-basis, value double;
@@ -29,9 +39,11 @@ attribute profit, value double;
 attribute inventory-quantity, value integer;
 attribute sale-id, value string;
 
+# Matching attributes
 attribute match-price, value double;
 attribute match-quantity, value integer;
 
+# Timestamps
 attribute created-at, value datetime;
 attribute updated-at, value datetime;
 attribute executed-at, value datetime;
@@ -41,16 +53,25 @@ attribute matched-at, value datetime;
 # Entities
 # ==========================================
 
-entity outlet,
+entity factory,
+    owns factory-id @key,
+    owns factory-name @card(1..1),
+    owns location @card(1..1),
+    owns balance @card(1..1),
+    owns is-open @card(1..1),
+    owns production-enabled @card(1..1),
+    owns created-at @card(1..1),
+    plays order-placement:placer,
+    plays trade-execution:seller;
+
+entity retail-outlet,
     owns outlet-id @key,
     owns outlet-name @card(1..1),
     owns location @card(1..1),
     owns balance @card(1..1),
+    owns is-open @card(1..1),
     owns margin-percent @card(1..1),
-    owns outlet-open @card(1..1),
-    owns production-enabled @card(0..1),
     owns created-at @card(1..1),
-    plays listing-creation:creator,
     plays order-placement:placer,
     plays trade-execution:buyer,
     plays trade-execution:seller,
@@ -72,13 +93,12 @@ entity order @abstract,
     plays order-matching:matched-order,
     plays order-placement:order;
 
-entity buy-order, sub order,
+entity buy-order sub order,
     plays order-matching:buy-side,
     plays trade-execution:buy-order;
 
-entity sell-order, sub order,
+entity sell-order sub order,
     plays order-matching:sell-side,
-    plays listing-creation:listing,
     plays trade-execution:sell-order;
 
 entity transaction,
@@ -107,11 +127,6 @@ entity inventory,
 # ==========================================
 # Relations
 # ==========================================
-
-relation listing-creation,
-    relates creator,
-    relates listing,
-    owns donut-type-id;
 
 relation order-placement,
     relates placer,
