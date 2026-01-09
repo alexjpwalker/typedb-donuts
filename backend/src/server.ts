@@ -99,6 +99,11 @@ class DonutExchangeServer {
         console.log(`[Customer] ${event.message}`);
       });
 
+      // Connect matching engine errors to WebSocket
+      this.exchangeService.onMatchingError((message, source) => {
+        this.wsManager?.notifyError(message, source);
+      });
+
       // Start donut supplier (factory)
       console.log('Starting donut supplier...');
       await this.donutSupplier.start();

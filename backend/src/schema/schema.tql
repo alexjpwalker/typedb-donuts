@@ -68,15 +68,16 @@ entity order @abstract,
     owns created-at,
     owns updated-at,
     plays order-matching:matched-order,
-    plays trade-execution:order,
     plays order-placement:order;
 
 entity buy-order, sub order,
-    plays order-matching:buy-side;
+    plays order-matching:buy-side,
+    plays trade-execution:buy-order;
 
 entity sell-order, sub order,
     plays order-matching:sell-side,
-    plays listing-creation:listing;
+    plays listing-creation:listing,
+    plays trade-execution:sell-order;
 
 entity transaction,
     owns transaction-id @key,
@@ -127,7 +128,8 @@ relation trade-execution,
     relates buyer,
     relates seller,
     relates trade,
-    relates order,
+    relates buy-order,
+    relates sell-order,
     owns donut-type-id;
 
 relation customer-sale,

@@ -92,6 +92,10 @@ export class ExchangeService {
     await this.matchingEngine.stop();
   }
 
+  onMatchingError(callback: (message: string, source: string) => void): void {
+    this.matchingEngine.onError(callback);
+  }
+
   // ==========================================
   // Order Management
   // ==========================================
@@ -123,8 +127,8 @@ export class ExchangeService {
     return await this.orderRepo.findById(orderId);
   }
 
-  async getOrderBook(donutTypeId: string): Promise<OrderBook> {
-    return await this.orderRepo.getOrderBook(donutTypeId);
+  async getOrderBook(donutTypeId: string, includeAll: boolean = false): Promise<OrderBook> {
+    return await this.orderRepo.getOrderBook(donutTypeId, includeAll);
   }
 
   // ==========================================
@@ -159,6 +163,14 @@ export class ExchangeService {
     const outlets = await this.outletRepo.findAll();
     // Filter out the supplier factory - it's internal infrastructure, not a retail outlet
     return outlets.filter(o => o.outletId !== 'supplier-factory');
+  }
+
+  async getFactory(): Promise<Outlet | null> {
+    return await this.outletRepo.findById('supplier-factory');
+  }
+
+  async toggleFactoryOpen(isOpen: boolean): Promise<void> {
+    await this.outletRepo.toggleOpen('supplier-factory', isOpen);
   }
 
   // ==========================================

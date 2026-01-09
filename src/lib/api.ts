@@ -96,8 +96,9 @@ class ApiClient {
   }
 
   // Order Book
-  async getOrderBook(donutTypeId: string): Promise<OrderBook> {
-    return this.request(`/order-book/${donutTypeId}`);
+  async getOrderBook(donutTypeId: string, includeAll: boolean = false): Promise<OrderBook> {
+    const query = includeAll ? '?includeAll=true' : '';
+    return this.request(`/order-book/${donutTypeId}${query}`);
   }
 
   // Transactions
@@ -113,6 +114,26 @@ class ApiClient {
 
   async getTransaction(id: string): Promise<Transaction> {
     return this.request(`/transactions/${id}`);
+  }
+
+  // Factory
+  async getFactory(): Promise<Outlet> {
+    return this.request('/factory');
+  }
+
+  async toggleFactory(isOpen: boolean): Promise<{ success: boolean; factory: Outlet }> {
+    return this.request('/factory/toggle', {
+      method: 'PATCH',
+      body: JSON.stringify({ isOpen }),
+    });
+  }
+
+  // Outlet toggle
+  async toggleOutlet(outletId: string, isOpen: boolean): Promise<{ success: boolean }> {
+    return this.request(`/outlets/${outletId}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isOpen }),
+    });
   }
 }
 

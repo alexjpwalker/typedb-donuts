@@ -24,14 +24,34 @@ export class TransactionRepository {
 
   async create(transaction: Omit<Transaction, 'transactionId' | 'executedAt'>): Promise<Transaction> {
     const transactionId = `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().replace('Z', '');
 
-    const queries = [
-      `insert $txn isa transaction, has transaction-id "${transactionId}", has quantity ${transaction.quantity}, has price-per-unit ${transaction.pricePerUnit}, has total-amount ${transaction.totalAmount}, has executed-at ${now};`,
-      `match $txn isa transaction, has transaction-id "${transactionId}"; $buyer isa outlet, has outlet-id "${transaction.buyerOutletId}"; $seller isa outlet, has outlet-id "${transaction.sellerOutletId}"; $buy-order isa order, has order-id "${transaction.buyOrderId}"; $sell-order isa order, has order-id "${transaction.sellOrderId}"; insert (buyer: $buyer, seller: $seller, trade: $txn, order: $buy-order, order: $sell-order) isa trade-execution, has donut-type-id "${transaction.donutTypeId}";`
-    ];
+    // Use separate one-shot queries instead of a managed transaction
+    // This is more reliable with the TypeDB cloud instance
+    const insertTxn = `
+      insert $txn isa transaction,
+        has transaction-id "${transactionId}",
+        has quantity ${transaction.quantity},
+        has price-per-unit ${transaction.pricePerUnit},
+        has total-amount ${transaction.totalAmount},
+        has executed-at ${now};
+    `;
 
-    await this.getHelper().executeTransaction(queries);
+    await this.getHelper().executeWriteQuery(insertTxn);
+
+    const insertRelation = `
+      match
+        $txn isa transaction, has transaction-id "${transactionId}";
+        $buyer isa outlet, has outlet-id "${transaction.buyerOutletId}";
+        $seller isa outlet, has outlet-id "${transaction.sellerOutletId}";
+        $buy-order isa buy-order, has order-id "${transaction.buyOrderId}";
+        $sell-order isa sell-order, has order-id "${transaction.sellOrderId}";
+      insert
+        (buyer: $buyer, seller: $seller, trade: $txn, buy-order: $buy-order, sell-order: $sell-order) isa trade-execution,
+          has donut-type-id "${transaction.donutTypeId}";
+    `;
+
+    await this.getHelper().executeWriteQuery(insertRelation);
 
     return {
       transactionId,

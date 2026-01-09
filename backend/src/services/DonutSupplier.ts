@@ -63,7 +63,7 @@ export class DonutSupplier {
           location: 'Industrial District',
           balance: 1000000, // Unlimited funds essentially
           marginPercent: 0,
-          isOpen: false // Factory doesn't sell to customers directly
+          isOpen: true // Factory starts open and producing
         });
         console.log('Created supplier outlet: Donut Factory');
       }
@@ -72,8 +72,22 @@ export class DonutSupplier {
     }
   }
 
+  private async isFactoryOpen(): Promise<boolean> {
+    try {
+      const factory = await this.exchangeService.getOutlet(this.SUPPLIER_ID);
+      return factory?.isOpen ?? false;
+    } catch {
+      return false;
+    }
+  }
+
   private async supplyDonuts(): Promise<void> {
     try {
+      // Check if factory is open before producing
+      if (!await this.isFactoryOpen()) {
+        return;
+      }
+
       const donutTypes = await this.exchangeService.getAllDonutTypes();
       if (donutTypes.length === 0) return;
 

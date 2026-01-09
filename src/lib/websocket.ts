@@ -1,10 +1,16 @@
 import type { Order, Transaction, OrderBook } from './types';
 
-export type WebSocketMessageType = 'order_created' | 'order_updated' | 'trade_executed' | 'order_book_updated';
+export type WebSocketMessageType = 'order_created' | 'order_updated' | 'trade_executed' | 'order_book_updated' | 'error';
+
+export interface ErrorData {
+  message: string;
+  source: string;
+  timestamp: string;
+}
 
 export interface WebSocketMessage {
   type: WebSocketMessageType;
-  data: Order | Transaction | OrderBook;
+  data: Order | Transaction | OrderBook | ErrorData;
 }
 
 type MessageHandler = (message: WebSocketMessage) => void;

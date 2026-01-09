@@ -6,6 +6,8 @@
   import PlaceOrder from './lib/components/PlaceOrder.svelte';
   import TransactionHistory from './lib/components/TransactionHistory.svelte';
   import Leaderboard from './lib/components/Leaderboard.svelte';
+  import FactoryControl from './lib/components/FactoryControl.svelte';
+  import ErrorLog from './lib/components/ErrorLog.svelte';
 
   onMount(() => {
     initializeStores();
@@ -29,6 +31,11 @@
       <button on:click={() => initializeStores()}>Retry</button>
     </div>
   {:else}
+    <!-- Factory Control Section -->
+    <section class="factory-section">
+      <FactoryControl />
+    </section>
+
     <!-- Selection Section -->
     <section class="selection-section">
       <OutletSelector />
@@ -60,6 +67,8 @@
   <footer>
     <p>Powered by TypeDB & Svelte</p>
   </footer>
+
+  <ErrorLog />
 </main>
 
 <style>
@@ -138,6 +147,10 @@
 
   .error-container button:hover {
     background: #2563eb;
+  }
+
+  .factory-section {
+    margin-bottom: 1.5rem;
   }
 
   .selection-section {

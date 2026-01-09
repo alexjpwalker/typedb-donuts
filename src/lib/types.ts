@@ -67,6 +67,7 @@ export interface OrderBookEntry {
   outletId: string;
   quantity: number;
   pricePerUnit: number;
+  status: OrderStatus;
   createdAt: string;
 }
 

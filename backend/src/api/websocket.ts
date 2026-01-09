@@ -3,9 +3,15 @@ import { Server as HTTPServer } from 'http';
 import { Order, Transaction, OrderBook } from '../models/types.js';
 import { CustomerEvent } from '../services/CustomerSimulator.js';
 
+export interface ErrorData {
+  message: string;
+  source: string;
+  timestamp: string;
+}
+
 export interface WebSocketMessage {
-  type: 'order_created' | 'order_updated' | 'trade_executed' | 'order_book_updated' | 'customer_event';
-  data: Order | Transaction | OrderBook | CustomerEvent;
+  type: 'order_created' | 'order_updated' | 'trade_executed' | 'order_book_updated' | 'customer_event' | 'error';
+  data: Order | Transaction | OrderBook | CustomerEvent | ErrorData;
 }
 
 export class WebSocketManager {
@@ -112,6 +118,20 @@ export class WebSocketManager {
     this.broadcast({
       type: 'customer_event',
       data: event
+    });
+  }
+
+  /**
+   * Notify clients of an error
+   */
+  notifyError(message: string, source: string): void {
+    this.broadcast({
+      type: 'error',
+      data: {
+        message,
+        source,
+        timestamp: new Date().toISOString()
+      }
     });
   }
 

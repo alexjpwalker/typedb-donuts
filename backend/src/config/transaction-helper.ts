@@ -24,6 +24,11 @@ export class TransactionHelper {
       throw new Error(`Query failed: ${response.error.message}`);
     }
 
+    // Check for 'err' property (alternative error format in TypeDB 3.x)
+    if ('err' in response) {
+      throw new Error(`Query failed: ${(response as any).err.message}`);
+    }
+
     if (!response.ok) {
       console.error('No ok property in response:', JSON.stringify(response));
       throw new Error('Invalid response structure from TypeDB');
@@ -86,6 +91,12 @@ export class TransactionHelper {
         if ('error' in response) {
           await this.driver.rollbackTransaction(transactionId);
           throw new Error(`Query failed: ${response.error.message}`);
+        }
+
+        // Check for 'err' property (alternative error format in TypeDB 3.x)
+        if ('err' in response) {
+          await this.driver.rollbackTransaction(transactionId);
+          throw new Error(`Query failed: ${(response as any).err.message}`);
         }
 
         results.push(response.ok);

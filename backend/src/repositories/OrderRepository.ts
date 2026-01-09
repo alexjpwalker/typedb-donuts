@@ -5,6 +5,10 @@ import { TypeDBConnection } from '../config/typedb.js';
 import { TransactionHelper } from '../config/transaction-helper.js';
 import { Order, OrderSide, OrderStatus, OrderBook, OrderBookEntry } from '../models/types.js';
 
+function parseStatus(status: string): OrderStatus {
+  return status as OrderStatus;
+}
+
 export class OrderRepository {
   private connection: TypeDBConnection;
   private helper: TransactionHelper | null = null;
@@ -107,14 +111,15 @@ export class OrderRepository {
     }
   }
 
-  async getOrderBook(donutTypeId: string): Promise<OrderBook> {
+  async getOrderBook(donutTypeId: string, includeAll: boolean = false): Promise<OrderBook> {
     const helper = this.getHelper();
 
     // Query sell orders (TypeDB 3.x syntax with 'links')
+    // We fetch all and filter client-side since TypeDB OR syntax is complex
     const sellQuery = `
       match
         $order isa sell-order,
-          has status "active";
+          has status $status;
         $placement isa order-placement,
           links (placer: $outlet, order: $order),
           has donut-type-id "${donutTypeId}";
@@ -123,6 +128,7 @@ export class OrderRepository {
         "outletId": $outlet.outlet-id,
         "quantity": $order.quantity,
         "pricePerUnit": $order.price-per-unit,
+        "status": $status,
         "createdAt": $order.created-at
       };
     `;
@@ -131,7 +137,7 @@ export class OrderRepository {
     const buyQuery = `
       match
         $order isa buy-order,
-          has status "active";
+          has status $status;
         $placement isa order-placement,
           links (placer: $outlet, order: $order),
           has donut-type-id "${donutTypeId}";
@@ -140,6 +146,7 @@ export class OrderRepository {
         "outletId": $outlet.outlet-id,
         "quantity": $order.quantity,
         "pricePerUnit": $order.price-per-unit,
+        "status": $status,
         "createdAt": $order.created-at
       };
     `;
@@ -160,6 +167,7 @@ export class OrderRepository {
             outletId: doc.outletId,
             quantity: doc.quantity,
             pricePerUnit: doc.pricePerUnit,
+            status: parseStatus(doc.status),
             createdAt: new Date(doc.createdAt)
           });
         }
@@ -172,28 +180,41 @@ export class OrderRepository {
             outletId: doc.outletId,
             quantity: doc.quantity,
             pricePerUnit: doc.pricePerUnit,
+            status: parseStatus(doc.status),
             createdAt: new Date(doc.createdAt)
           });
         }
       }
 
+      // Filter by status if not including all
+      // 'active' and 'partially_filled' are matchable orders
+      const isMatchable = (status: OrderStatus) =>
+        status === OrderStatus.ACTIVE || status === OrderStatus.PARTIALLY_FILLED;
+
+      const filteredSellOrders = includeAll
+        ? sellOrders
+        : sellOrders.filter(o => isMatchable(o.status));
+      const filteredBuyOrders = includeAll
+        ? buyOrders
+        : buyOrders.filter(o => isMatchable(o.status));
+
       // Sort: sell orders by price asc (best ask first), then by time asc (oldest first)
       // Buy orders by price desc (best bid first), then by time asc (oldest first)
       // This implements price-time priority
-      sellOrders.sort((a, b) => {
+      filteredSellOrders.sort((a, b) => {
         if (a.pricePerUnit !== b.pricePerUnit) {
           return a.pricePerUnit - b.pricePerUnit;
         }
         return a.createdAt.getTime() - b.createdAt.getTime();
       });
-      buyOrders.sort((a, b) => {
+      filteredBuyOrders.sort((a, b) => {
         if (a.pricePerUnit !== b.pricePerUnit) {
           return b.pricePerUnit - a.pricePerUnit;
         }
         return a.createdAt.getTime() - b.createdAt.getTime();
       });
 
-      return { donutTypeId, buyOrders, sellOrders };
+      return { donutTypeId, buyOrders: filteredBuyOrders, sellOrders: filteredSellOrders };
     } catch (error) {
       console.error('Error fetching order book:', error);
       return { donutTypeId, buyOrders: [], sellOrders: [] };
@@ -202,21 +223,25 @@ export class OrderRepository {
 
   async updateStatus(orderId: string, status: OrderStatus): Promise<void> {
     const now = this.formatDateTime(new Date());
-    const queries = [
-      `match $order isa order, has order-id "${orderId}", has status $old-status, has updated-at $old-time; delete $old-status isa status; $old-time isa updated-at;`,
-      `match $order isa order, has order-id "${orderId}"; insert $order has status "${status}"; $order has updated-at ${now};`
-    ];
+    const query = `
+      match
+      $order isa order, has order-id "${orderId}";
+      update
+      $order has status "${status}", has updated-at ${now};
+    `;
 
-    await this.getHelper().executeTransaction(queries);
+    await this.getHelper().executeWriteQuery(query);
   }
 
   async updateQuantity(orderId: string, newQuantity: number): Promise<void> {
     const now = this.formatDateTime(new Date());
-    const queries = [
-      `match $order isa order, has order-id "${orderId}", has quantity $old-qty, has updated-at $old-time; delete $old-qty isa quantity; $old-time isa updated-at;`,
-      `match $order isa order, has order-id "${orderId}"; insert $order has quantity ${newQuantity}; $order has updated-at ${now};`
-    ];
+    const query = `
+      match
+      $order isa order, has order-id "${orderId}";
+      update
+      $order has quantity ${newQuantity}, has updated-at ${now};
+    `;
 
-    await this.getHelper().executeTransaction(queries);
+    await this.getHelper().executeWriteQuery(query);
   }
 }

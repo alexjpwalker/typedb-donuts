@@ -13,12 +13,14 @@ export interface TradeExecutedEvent {
 }
 
 type TradeCallback = (event: TradeExecutedEvent) => void;
+type ErrorCallback = (message: string, source: string) => void;
 
 export class MatchingEngine {
   private orderRepo: OrderRepository;
   private transactionRepo: TransactionRepository;
   private outletRepo: OutletRepository;
   private tradeCallbacks: TradeCallback[] = [];
+  private errorCallbacks: ErrorCallback[] = [];
 
   constructor() {
     this.orderRepo = new OrderRepository();
@@ -28,6 +30,20 @@ export class MatchingEngine {
 
   onTradeExecuted(callback: TradeCallback): void {
     this.tradeCallbacks.push(callback);
+  }
+
+  onError(callback: ErrorCallback): void {
+    this.errorCallbacks.push(callback);
+  }
+
+  private emitError(message: string, source: string): void {
+    for (const callback of this.errorCallbacks) {
+      try {
+        callback(message, source);
+      } catch (error) {
+        console.error('Error in error callback:', error);
+      }
+    }
   }
 
   /**
@@ -61,7 +77,7 @@ export class MatchingEngine {
 
       // Fetch full sell order
       const sellOrder = await this.orderRepo.findById(sellEntry.orderId);
-      if (!sellOrder || sellOrder.status !== OrderStatus.ACTIVE) {
+      if (!sellOrder || (sellOrder.status !== OrderStatus.ACTIVE && sellOrder.status !== OrderStatus.PARTIALLY_FILLED)) {
         continue;
       }
 
@@ -118,7 +134,7 @@ export class MatchingEngine {
 
       // Fetch full buy order
       const buyOrder = await this.orderRepo.findById(buyEntry.orderId);
-      if (!buyOrder || buyOrder.status !== OrderStatus.ACTIVE) {
+      if (!buyOrder || (buyOrder.status !== OrderStatus.ACTIVE && buyOrder.status !== OrderStatus.PARTIALLY_FILLED)) {
         continue;
       }
 
@@ -168,6 +184,8 @@ export class MatchingEngine {
   ): Promise<void> {
     const totalAmount = quantity * price;
 
+    console.log(`[Trade] Creating transaction for ${quantity} @ $${price}`);
+
     // Create transaction record
     const transaction = await this.transactionRepo.create({
       donutTypeId: buyOrder.donutTypeId,
@@ -180,9 +198,18 @@ export class MatchingEngine {
       sellOrderId: sellOrder.orderId
     });
 
+    console.log(`[Trade] Transaction created: ${transaction.transactionId}`);
+
     // Update outlet balances
     const buyer = await this.outletRepo.findById(buyOrder.outletId);
     const seller = await this.outletRepo.findById(sellOrder.outletId);
+
+    if (!buyer) {
+      console.error(`[Trade] Buyer not found: ${buyOrder.outletId}`);
+    }
+    if (!seller) {
+      console.error(`[Trade] Seller not found: ${sellOrder.outletId}`);
+    }
 
     if (buyer && seller) {
       // Buyer pays, seller receives
@@ -212,16 +239,80 @@ export class MatchingEngine {
     }
   }
 
+  private sweepTimeoutId: NodeJS.Timeout | null = null;
+  private readonly SWEEP_INTERVAL_MS = 5000; // Sweep every 5 seconds
+  private isSweeping = false;
+  private shouldStop = false;
+
   /**
    * Continuously monitor for matching opportunities (background process)
    */
   async start(): Promise<void> {
     console.log('Matching engine started');
-    // In a real implementation, this could use a queue or event system
-    // For now, matching happens synchronously when orders are placed
+    this.shouldStop = false;
+
+    // Start background sweep - schedules next sweep only after current completes
+    this.scheduleSweep();
+  }
+
+  private scheduleSweep(): void {
+    if (this.shouldStop) return;
+
+    this.sweepTimeoutId = setTimeout(async () => {
+      if (this.isSweeping || this.shouldStop) {
+        this.scheduleSweep();
+        return;
+      }
+
+      this.isSweeping = true;
+      try {
+        await this.sweepForMatches();
+      } finally {
+        this.isSweeping = false;
+        this.scheduleSweep();
+      }
+    }, this.SWEEP_INTERVAL_MS);
   }
 
   async stop(): Promise<void> {
+    this.shouldStop = true;
+    if (this.sweepTimeoutId) {
+      clearTimeout(this.sweepTimeoutId);
+      this.sweepTimeoutId = null;
+    }
     console.log('Matching engine stopped');
+  }
+
+  /**
+   * Sweep through all donut types looking for matching opportunities
+   */
+  private async sweepForMatches(): Promise<void> {
+    try {
+      // Get all donut types and sweep each order book
+      const donutTypes = ['glazed', 'chocolate', 'jelly']; // TODO: fetch dynamically
+
+      for (const donutTypeId of donutTypes) {
+        const orderBook = await this.orderRepo.getOrderBook(donutTypeId);
+
+        // Check if there are crossing orders (buy price >= sell price)
+        if (orderBook.sellOrders.length > 0 && orderBook.buyOrders.length > 0) {
+          const bestSell = orderBook.sellOrders[0];
+          const bestBuy = orderBook.buyOrders[0];
+
+          if (bestBuy.pricePerUnit >= bestSell.pricePerUnit) {
+            // Found crossing orders - try to match them
+            const buyOrder = await this.orderRepo.findById(bestBuy.orderId);
+            if (buyOrder && (buyOrder.status === OrderStatus.ACTIVE || buyOrder.status === OrderStatus.PARTIALLY_FILLED)) {
+              console.log(`[Sweep] Found crossing orders for ${donutTypeId}, attempting match...`);
+              await this.matchBuyOrder(buyOrder);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[Sweep] Error during sweep:', error);
+      this.emitError(errorMessage, 'MatchingEngine.sweep');
+    }
   }
 }

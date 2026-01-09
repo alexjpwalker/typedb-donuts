@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { orderBook, bestBid, bestAsk, spread } from '../stores';
+  import { orderBook, bestBid, bestAsk, spread, showFilledOrders, refreshOrderBook, selectedDonutType } from '../stores';
+  import { OrderStatus } from '../types';
 
   function formatPrice(price: number): string {
     return price.toFixed(2);
@@ -9,16 +10,31 @@
     const date = new Date(dateStr);
     return date.toLocaleTimeString();
   }
+
+  function isActive(status: OrderStatus): boolean {
+    return status === OrderStatus.ACTIVE;
+  }
+
+  // Re-fetch when toggle changes
+  $: if ($selectedDonutType && $showFilledOrders !== undefined) {
+    refreshOrderBook($selectedDonutType.donutTypeId, $showFilledOrders);
+  }
 </script>
 
 <div class="order-book">
   <div class="header">
-    <h2>Order Book</h2>
-    {#if $bestBid && $bestAsk}
-      <div class="spread">
-        Spread: ${formatPrice($spread || 0)}
-      </div>
-    {/if}
+    <h2>Order Book {#if $selectedDonutType}<span class="donut-type">({$selectedDonutType.donutName})</span>{/if}</h2>
+    <div class="header-right">
+      <label class="toggle-label">
+        <input type="checkbox" bind:checked={$showFilledOrders} />
+        Show filled
+      </label>
+      {#if $bestBid && $bestAsk}
+        <div class="spread">
+          Spread: ${formatPrice($spread || 0)}
+        </div>
+      {/if}
+    </div>
   </div>
 
   {#if $orderBook}
@@ -33,7 +49,7 @@
         </div>
         <div class="orders-list">
           {#each $orderBook.sellOrders as order (order.orderId)}
-            <div class="order-row sell">
+            <div class="order-row sell" class:filled={!isActive(order.status)}>
               <span class="price">${formatPrice(order.pricePerUnit)}</span>
               <span class="quantity">{order.quantity}</span>
               <span class="time">{formatDate(order.createdAt)}</span>
@@ -65,7 +81,7 @@
         </div>
         <div class="orders-list">
           {#each $orderBook.buyOrders as order (order.orderId)}
-            <div class="order-row buy">
+            <div class="order-row buy" class:filled={!isActive(order.status)}>
               <span class="price">${formatPrice(order.pricePerUnit)}</span>
               <span class="quantity">{order.quantity}</span>
               <span class="time">{formatDate(order.createdAt)}</span>
@@ -96,9 +112,34 @@
     margin-bottom: 1rem;
   }
 
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #666;
+    cursor: pointer;
+  }
+
+  .toggle-label input {
+    cursor: pointer;
+  }
+
   h2 {
     margin: 0;
     font-size: 1.5rem;
+  }
+
+  .donut-type {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #6b7280;
   }
 
   .spread {
@@ -163,6 +204,16 @@
 
   .order-row.buy {
     background: rgba(16, 185, 129, 0.05);
+  }
+
+  .order-row.filled {
+    opacity: 0.5;
+    background: #f3f4f6;
+  }
+
+  .order-row.filled .price {
+    color: #9ca3af !important;
+    text-decoration: line-through;
   }
 
   .price {

@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { DonutType, Outlet, OrderBook, Transaction } from './types';
 import { api } from './api';
-import { websocket } from './websocket';
+import { websocket, type ErrorData } from './websocket';
 
 // Selected outlet and donut type
 export const selectedOutlet = writable<Outlet | null>(null);
@@ -12,10 +12,14 @@ export const outlets = writable<Outlet[]>([]);
 export const donutTypes = writable<DonutType[]>([]);
 export const orderBook = writable<OrderBook | null>(null);
 export const transactions = writable<Transaction[]>([]);
+export const factory = writable<Outlet | null>(null);
 
 // Loading states
 export const loading = writable(false);
 export const error = writable<string | null>(null);
+
+// Error log (for displaying backend errors)
+export const errorLog = writable<ErrorData[]>([]);
 
 // Initialize stores
 export async function initializeStores() {
@@ -23,14 +27,16 @@ export async function initializeStores() {
   error.set(null);
 
   try {
-    // Load outlets and donut types
-    const [outletsData, donutTypesData] = await Promise.all([
+    // Load outlets, donut types, and factory
+    const [outletsData, donutTypesData, factoryData] = await Promise.all([
       api.getOutlets(),
-      api.getDonutTypes()
+      api.getDonutTypes(),
+      api.getFactory().catch(() => null) // Factory might not exist yet
     ]);
 
     outlets.set(outletsData);
     donutTypes.set(donutTypesData);
+    factory.set(factoryData);
 
     // Set defaults if available
     if (outletsData.length > 0) {
@@ -68,6 +74,11 @@ export async function initializeStores() {
       })();
     });
 
+    websocket.on('error', (message) => {
+      const errorData = message.data as ErrorData;
+      errorLog.update(logs => [errorData, ...logs].slice(0, 100)); // Keep last 100 errors
+    });
+
   } catch (err) {
     console.error('Failed to initialize stores:', err);
 
@@ -86,10 +97,18 @@ export async function initializeStores() {
   }
 }
 
+// Order book settings
+export const showFilledOrders = writable(false);
+
 // Refresh functions
-export async function refreshOrderBook(donutTypeId: string) {
+export async function refreshOrderBook(donutTypeId: string, includeAll?: boolean) {
   try {
-    const book = await api.getOrderBook(donutTypeId);
+    // Use the passed value or get current setting
+    let include = includeAll;
+    if (include === undefined) {
+      showFilledOrders.subscribe(v => include = v)();
+    }
+    const book = await api.getOrderBook(donutTypeId, include);
     orderBook.set(book);
   } catch (err) {
     console.error('Failed to refresh order book:', err);
@@ -123,6 +142,37 @@ export async function refreshOutlets() {
     })();
   } catch (err) {
     console.error('Failed to refresh outlets:', err);
+  }
+}
+
+export async function refreshFactory() {
+  try {
+    const factoryData = await api.getFactory();
+    factory.set(factoryData);
+  } catch (err) {
+    console.error('Failed to refresh factory:', err);
+  }
+}
+
+export async function toggleFactory(isOpen: boolean) {
+  try {
+    const result = await api.toggleFactory(isOpen);
+    if (result.factory) {
+      factory.set(result.factory);
+    }
+  } catch (err) {
+    console.error('Failed to toggle factory:', err);
+    throw err;
+  }
+}
+
+export async function toggleOutlet(outletId: string, isOpen: boolean) {
+  try {
+    await api.toggleOutlet(outletId, isOpen);
+    await refreshOutlets();
+  } catch (err) {
+    console.error('Failed to toggle outlet:', err);
+    throw err;
   }
 }
 

@@ -199,6 +199,42 @@ export function createRoutes(exchangeService: ExchangeService): Router {
   });
 
   // ==========================================
+  // Factory (Donut Supplier)
+  // ==========================================
+
+  router.get('/factory', async (_req: Request, res: Response) => {
+    try {
+      const factory = await exchangeService.getFactory();
+      if (!factory) {
+        res.status(404).json({ error: 'Factory not found' });
+        return;
+      }
+      res.json(factory);
+    } catch (error) {
+      console.error('Error fetching factory:', error);
+      res.status(500).json({ error: 'Failed to fetch factory' });
+    }
+  });
+
+  router.patch('/factory/toggle', async (req: Request, res: Response) => {
+    try {
+      const { isOpen } = req.body;
+
+      if (typeof isOpen !== 'boolean') {
+        res.status(400).json({ error: 'isOpen must be a boolean' });
+        return;
+      }
+
+      await exchangeService.toggleFactoryOpen(isOpen);
+      const factory = await exchangeService.getFactory();
+      res.json({ success: true, factory });
+    } catch (error) {
+      console.error('Error toggling factory:', error);
+      res.status(500).json({ error: 'Failed to toggle factory status' });
+    }
+  });
+
+  // ==========================================
   // Orders
   // ==========================================
 
@@ -250,7 +286,8 @@ export function createRoutes(exchangeService: ExchangeService): Router {
 
   router.get('/order-book/:donutTypeId', async (req: Request, res: Response) => {
     try {
-      const orderBook = await exchangeService.getOrderBook(req.params.donutTypeId);
+      const includeAll = req.query.includeAll === 'true';
+      const orderBook = await exchangeService.getOrderBook(req.params.donutTypeId, includeAll);
       res.json(orderBook);
     } catch (error) {
       console.error('Error fetching order book:', error);
